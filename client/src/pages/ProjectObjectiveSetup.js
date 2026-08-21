@@ -325,6 +325,7 @@ const ProjectObjectiveSetup = () => {
       });
       
       // Publishing project objective
+      console.log('[ProjectObjectiveSetup] Publishing project objective:', {
         totalFields: Object.keys(cleanedProjectObjectiveData).length,
         fields: Object.keys(cleanedProjectObjectiveData)
       });
