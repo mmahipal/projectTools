@@ -170,7 +170,7 @@ const ProjectQualificationStepSetup = () => {
         if (currentProjectName && currentProjectName.trim() !== '') {
           params.append('project', currentProjectName);
         }
-        
+        console.log('[ProjectQualificationStepSetup] Fetching qualification steps:', {
           searchTerm: qualificationStepSearchTerm,
           project: currentProjectName,
           url: `/salesforce/qualification-steps?${params.toString()}`
