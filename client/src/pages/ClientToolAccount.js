@@ -1088,7 +1088,16 @@ const ClientToolAccount = () => {
           accountId
         });
       });
-
+      const proceedWithBulkUpdate = async () => {  // Add 'async' here
+        setUpdating(true);
+        try {
+          const updatePromises = bulkSelectedProjects.map(projectId => {
+          const accountId = selectedAccounts[projectId];
+          return apiClient.post('/client-tool-account/update-mapping', {
+            projectId,
+            accountId
+        });
+      });
       const results = await Promise.all(updatePromises);
       const successCount = results.filter(r => r.data.success).length;
       
