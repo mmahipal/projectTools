@@ -34,7 +34,7 @@ jobs:
       - name: Install Dependencies
         run: npm ci
         working-directory: client
-         env:
+        env:
           CI: false # <-- Add this block to ignore code warnings
 
       - name: Build Application
