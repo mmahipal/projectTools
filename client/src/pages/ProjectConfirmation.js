@@ -144,6 +144,7 @@ const ProjectConfirmation = () => {
 
       // Log the data being sent (for debugging)
       // Publishing project to Salesforce
+      console.log('[ProjectConfirmation] Publishing project to Salesforce:', {
         totalFields: Object.keys(finalProjectData).length,
         fields: Object.keys(finalProjectData),
         sampleData: {
