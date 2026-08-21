@@ -116,7 +116,7 @@ export const usePreview = () => {
 
         // Double-check we have required data before calling API
         if (!reportConfig.objectType || !fields || fields.length === 0) {
-          // Skipping legacy preview - missing data
+          console.warn('[Preview] Skipping legacy preview - missing data:', {
             hasObjectType: !!reportConfig.objectType,
             objectType: reportConfig.objectType,
             fieldsCount: fields ? fields.length : 0,
