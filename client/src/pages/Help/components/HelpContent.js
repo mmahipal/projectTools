@@ -13,6 +13,7 @@ const HelpContent = ({ selectedContent }) => {
 
   // Debug: Log content to verify it's loaded
   if (process.env.NODE_ENV === 'development') {
+    console.log('HelpContent loaded:', {
       title: selectedContent.title,
       sectionsCount: selectedContent.sections?.length || 0,
       sections: selectedContent.sections?.map(s => s.heading) || []
@@ -40,4 +41,3 @@ const HelpContent = ({ selectedContent }) => {
 };
 
 export default HelpContent;
-
