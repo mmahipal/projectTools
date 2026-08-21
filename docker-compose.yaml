@@ -1,0 +1,43 @@
+services:
+  backend:
+    build: .
+    command: npm run server
+    working_dir: /app
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=development
+      - PORT=5000
+      - JWT_SECRET=THo/1JREvucubVNF4dCQLmSZXALXHGzwPi9zUZp/XzFbXzugIJ6FPXfjhU4k3dLgoDZJS/3EpnskMSuElLuiRw==
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/client/node_modules
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:5000/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  frontend:
+    build: .
+    command: npm run client
+    working_dir: /app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - WDS_SOCKET_HOST=localhost
+      - WDS_SOCKET_PORT=3000
+      - REACT_APP_BACKEND_URL=http://backend:5000
+      - CHOKIDAR_USEPOLLING=true
+      - JWT_SECRET=THo/1JREvucubVNF4dCQLmSZXALXHGzwPi9zUZp/XzFbXzugIJ6FPXfjhU4k3dLgoDZJS/3EpnskMSuElLuiRw==
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/client/node_modules
+    depends_on:
+      backend:
+        condition: service_healthy

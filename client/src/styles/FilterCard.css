@@ -1,0 +1,127 @@
+/* Filter Card - Scoped Styles */
+
+.filter-card {
+  border-left: 4px solid #8b5cf6;
+}
+
+.filter-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.filter-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #f9fafb;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.filter-field {
+  font-weight: 500;
+  color: #002329;
+}
+
+.filter-operator {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.filter-value {
+  flex: 1;
+  color: #002329;
+}
+
+.filter-remove-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 2px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.filter-remove-btn:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.add-filter-btn-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  background: #fff;
+  color: #08979C;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Poppins', sans-serif;
+  margin-top: 4px;
+}
+
+.add-filter-btn-small:hover {
+  border-color: #08979C;
+  background: #f0fdfa;
+}
+
+.filter-builder-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.filter-builder-content {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.filter-builder-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.filter-builder-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #002329;
+  font-family: 'Poppins', sans-serif;
+}
+
+.filter-builder-header button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+  border-radius: 4px;
+}
+
+.filter-builder-header button:hover {
+  background: #f3f4f6;
+}
+
+
+

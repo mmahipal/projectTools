@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta
+      name="description"
+      content="Project Setup Application with Salesforce Integration"
+    />
+    <link rel="icon" type="image/svg+xml" href="/appen_symbol_white_cmyk (1).svg" />
+    <link rel="shortcut icon" type="image/svg+xml" href="/appen_symbol_white_cmyk (1).svg" />
+    <link rel="apple-touch-icon" href="/appen_symbol_white_cmyk (1).svg" />
+    <title>Project Tools</title>
+    <script>
+      // Suppress WebSocket errors from React's hot reload (must run before React loads)
+      // This runs for all environments to suppress dev server WebSocket connections
+      (function() {
+        // Check if isLocalhost is already declared to avoid redeclaration errors
+        if (typeof window.__isLocalhost === 'undefined') {
+          window.__isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        }
+        const isLocalhost = window.__isLocalhost;
+        const isProduction = !isLocalhost;
+        
+        // Always suppress WebSocket errors (they're harmless and only for dev server hot reload)
+        const originalError = console.error;
+        const originalWarn = console.warn;
+        const originalLog = console.log;
+        
+        // Override console.error
+        console.error = function(...args) {
+          const errorMessage = args.join(' ');
+          if (errorMessage.includes('WebSocket') || 
+              errorMessage.includes('ws://') || 
+              errorMessage.includes('wss://') ||
+              errorMessage.includes('Invalid frame header') ||
+              errorMessage.includes('WebSocketClient') ||
+              errorMessage.includes('connection to ws://') ||
+              errorMessage.includes('connection to wss://') ||
+              errorMessage.includes('can\'t establish a connection') ||
+              errorMessage.includes('can\'t establish') ||
+              errorMessage.includes('establish a connection') ||
+              errorMessage.includes('establish a connection to the server') ||
+              errorMessage.includes(':3000') ||
+              errorMessage.includes('/ws') ||
+              errorMessage.includes('was interrupted while the page was loading')) {
+            return; // Suppress WebSocket errors
+          }
+          originalError.apply(console, args);
+        };
+        
+          // Override console.warn
+          console.warn = function(...args) {
+            const warnMessage = args.join(' ');
+            if (warnMessage.includes('WebSocket') || 
+                warnMessage.includes('ws://') || 
+                warnMessage.includes('wss://') ||
+                warnMessage.includes('Invalid frame header') ||
+                warnMessage.includes('can\'t establish a connection') ||
+                warnMessage.includes('can\'t establish') ||
+                warnMessage.includes('establish a connection') ||
+                warnMessage.includes(':3000') ||
+                warnMessage.includes('/ws') ||
+                warnMessage.includes('was interrupted while the page was loading')) {
+              return; // Suppress WebSocket warnings
+            }
+            originalWarn.apply(console, args);
+          };
+          
+          // Override console.log to catch WebSocket messages
+          console.log = function(...args) {
+            const firstArg = args[0];
+            const logMessage = typeof firstArg === 'string' ? firstArg : String(firstArg);
+            
+            // Only suppress if it's clearly a WebSocket message
+            if (logMessage.includes('WebSocket') && 
+                (logMessage.includes('ws://') || 
+                 logMessage.includes('wss://') ||
+                 logMessage.includes('was interrupted while the page was loading'))) {
+              return; // Suppress WebSocket logs
+            }
+            originalLog.apply(console, args);
+          };
+          
+          // Catch all error events (use capture phase to catch early)
+          window.addEventListener('error', function(event) {
+            const message = event.message || event.error?.message || event.filename || event.target?.src || '';
+            const errorString = message.toString();
+            const errorName = event.error?.name || '';
+            const stack = event.error?.stack || '';
+            
+            // Suppress WebSocket errors including "Illegal invocation" errors from webpack-dev-server
+            const isWebSocketError = errorString.includes('WebSocket') || 
+                errorString.includes('ws://') ||
+                errorString.includes('wss://') ||
+                errorString.includes('Invalid frame header') ||
+                errorString.includes('WebSocketClient') ||
+                errorString.includes('connection to ws://') ||
+                errorString.includes('connection to wss://') ||
+                errorString.includes('can\'t establish a connection') ||
+                errorString.includes('can\'t establish') ||
+                errorString.includes('establish a connection') ||
+                errorString.includes(':3000') ||
+                errorString.includes('/ws') ||
+                errorString.includes('was interrupted while the page was loading') ||
+                (errorName === 'TypeError' && errorString.includes('Illegal invocation') && 
+                 (stack.includes('WebSocket') || stack.includes('webpack-dev-server') || stack.includes('WebSocketClient')));
+            
+            if (isWebSocketError) {
+              event.preventDefault();
+              event.stopPropagation();
+              event.stopImmediatePropagation();
+              return false; // Suppress WebSocket errors
+            }
+            
+            // Suppress ChunkLoadError from browser extensions or stale builds
+            const isChunkLoadError = errorString.includes('ChunkLoadError') ||
+                errorString.includes('Loading chunk') ||
+                errorString.includes('Failed to fetch dynamically imported module') ||
+                (event.error?.name === 'ChunkLoadError');
+            
+            if (isChunkLoadError) {
+              // Silently handle chunk load errors - they're usually from extensions or stale builds
+              event.preventDefault();
+              event.stopPropagation();
+              return false;
+            }
+            
+            // Log all non-WebSocket errors
+            console.error('Unhandled error:', {
+              message: event.message,
+              filename: event.filename,
+              lineno: event.lineno,
+              colno: event.colno,
+              error: event.error,
+              stack: event.error?.stack
+            });
+            
+            // Don't prevent default for non-WebSocket errors
+          }, true); // Use capture phase to catch errors early
+          
+          // Catch unhandled promise rejections
+          window.addEventListener('unhandledrejection', function(event) {
+            const reason = event.reason?.message || event.reason?.toString() || '';
+            const reasonString = reason.toString();
+            const reasonName = event.reason?.name || '';
+            const stack = event.reason?.stack || '';
+            
+            // Suppress WebSocket promise rejections including "Illegal invocation" errors
+            const isWebSocketRejection = reasonString.includes('WebSocket') || 
+                reasonString.includes('ws://') ||
+                reasonString.includes('wss://') ||
+                reasonString.includes('Invalid frame header') ||
+                reasonString.includes('WebSocketClient') ||
+                reasonString.includes('connection to ws://') ||
+                reasonString.includes('connection to wss://') ||
+                reasonString.includes('can\'t establish a connection') ||
+                reasonString.includes('was interrupted while the page was loading') ||
+                (reasonName === 'TypeError' && reasonString.includes('Illegal invocation') && 
+                 (stack.includes('WebSocket') || stack.includes('webpack-dev-server') || stack.includes('WebSocketClient')));
+            
+            if (isWebSocketRejection) {
+              event.preventDefault();
+              return false; // Suppress WebSocket promise rejections
+            }
+            
+            // Suppress ChunkLoadError from browser extensions or stale builds
+            // These are typically harmless and can be resolved by refreshing
+            const isChunkLoadError = reasonString.includes('ChunkLoadError') ||
+                reasonString.includes('Loading chunk') ||
+                reasonString.includes('Failed to fetch dynamically imported module') ||
+                (event.reason?.name === 'ChunkLoadError');
+            
+            if (isChunkLoadError) {
+              // Silently handle chunk load errors - they're usually from extensions or stale builds
+              event.preventDefault();
+              return false;
+            }
+            
+            // Log all non-WebSocket promise rejections
+            console.error('Unhandled promise rejection:', {
+              reason: event.reason,
+              message: event.reason?.message,
+              stack: event.reason?.stack
+            });
+            
+            // Don't prevent default for non-WebSocket rejections
+          });
+          
+          // Intercept WebSocket creation to prevent errors from dev server hot reload
+          // CRITICAL: Only intercept in development (localhost) to avoid "Illegal invocation" errors in production
+          // In production builds, webpack-dev-server code shouldn't be present, but if it is, we need to handle it
+          const OriginalWebSocket = window.WebSocket;
+          const isLocalhost = window.location.hostname === 'localhost' || 
+                             window.location.hostname === '127.0.0.1' || 
+                             window.location.hostname === '';
+          
+          // Only wrap WebSocket in development (localhost) environments
+          // This prevents "Illegal invocation" errors in production where WebSocket should work normally
+          if (!isProduction && isLocalhost) {
+            // Create a wrapper that preserves constructor context to prevent "Illegal invocation" errors
+            // This works even when WebSocket is destructured (e.g., const { WebSocket } = window)
+            // CRITICAL: Use a function declaration (not arrow function) so it can be used as a constructor
+            function WebSocketWrapper(url, protocols) {
+              // Suppress WebSocket connections to dev server hot reload
+              // Check for common dev server WebSocket patterns
+              if (url && (
+                url.includes(':3000/ws') ||           // Dev server port
+                url.includes(':3000/') ||              // Any path on port 3000
+                url.includes('localhost:3000') ||     // Localhost dev server
+                url.includes('127.0.0.1:3000')        // Localhost IP dev server
+              )) {
+                // Create a dummy WebSocket that doesn't actually connect
+                // This prevents the connection error from appearing in the console
+                const dummySocket = Object.create(OriginalWebSocket.prototype);
+                dummySocket.readyState = 3; // CLOSED
+                dummySocket.url = url;
+                dummySocket.protocol = '';
+                dummySocket.extensions = '';
+                dummySocket.binaryType = 'blob';
+                dummySocket.close = function() {};
+                dummySocket.send = function() {};
+                dummySocket.addEventListener = function() {};
+                dummySocket.removeEventListener = function() {};
+                dummySocket.dispatchEvent = function() { return true; };
+                
+                return dummySocket;
+              }
+              
+              // For all other WebSocket connections, use the original
+              // CRITICAL: Always call the original constructor with proper context
+              // The original WebSocket constructor will work correctly when called with 'new'
+              if (protocols !== undefined) {
+                return new OriginalWebSocket(url, protocols);
+              } else {
+                return new OriginalWebSocket(url);
+              }
+            }
+            
+            // Copy prototype to preserve WebSocket behavior
+            WebSocketWrapper.prototype = OriginalWebSocket.prototype;
+            
+            // Copy static properties to preserve WebSocket constants
+            Object.setPrototypeOf(WebSocketWrapper, OriginalWebSocket);
+            
+            // Ensure static constants are available
+            if (OriginalWebSocket.CONNECTING !== undefined) {
+              WebSocketWrapper.CONNECTING = OriginalWebSocket.CONNECTING;
+            }
+            if (OriginalWebSocket.OPEN !== undefined) {
+              WebSocketWrapper.OPEN = OriginalWebSocket.OPEN;
+            }
+            if (OriginalWebSocket.CLOSING !== undefined) {
+              WebSocketWrapper.CLOSING = OriginalWebSocket.CLOSING;
+            }
+            if (OriginalWebSocket.CLOSED !== undefined) {
+              WebSocketWrapper.CLOSED = OriginalWebSocket.CLOSED;
+            }
+            
+            // Replace window.WebSocket with our wrapper only in development
+            window.WebSocket = WebSocketWrapper;
+          }
+          // In production, leave WebSocket untouched to avoid any potential "Illegal invocation" errors
+      })();
+    </script>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+

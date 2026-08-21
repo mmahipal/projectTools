@@ -1,0 +1,56 @@
+.status-distribution-chart {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+.chart-header {
+  margin-bottom: 20px;
+}
+
+.chart-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #002329;
+  margin: 0 0 4px 0;
+}
+
+.chart-subtitle {
+  font-size: 13px;
+  color: #666;
+  margin: 0;
+}
+
+.custom-tooltip {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  padding: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.tooltip-label {
+  font-weight: 600;
+  color: #002329;
+  margin: 0 0 8px 0;
+  font-size: 14px;
+}
+
+.tooltip-value {
+  font-size: 13px;
+  color: #666;
+  margin: 4px 0;
+}
+
+.chart-error,
+.chart-empty {
+  padding: 40px;
+  text-align: center;
+  color: #666;
+}
+
+.chart-error {
+  color: #ef4444;
+}
+

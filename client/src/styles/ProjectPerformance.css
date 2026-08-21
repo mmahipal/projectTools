@@ -1,0 +1,667 @@
+/* Project Performance Dashboard Styles */
+.project-performance {
+  min-height: 100vh;
+  background: #ffffff;
+  transition: margin-left var(--transition-base, 0.3s);
+  width: 100%;
+  color: #002329;
+  font-family: Poppins, sans-serif;
+  font-size: 14px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.project-performance-container {
+  width: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  color: #002329;
+  font-family: Poppins, sans-serif;
+  font-size: 14px;
+}
+
+.project-performance-header {
+  background: var(--surface, #ffffff);
+  border-bottom: 1px solid var(--border-color, #e8e8e8);
+  padding: 4px 16px;
+  margin: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: none;
+}
+
+.header-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-lg);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+  min-width: 0;
+}
+
+.header-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: #002329;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+}
+
+.header-menu-toggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 2px 0 0 0;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: 1px solid #08979C;
+  background: #08979C;
+  color: #FFF;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: Poppins, sans-serif;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: #067a7f;
+  border-color: #067a7f;
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.refresh-btn .spinning,
+.action-btn .spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.header-user-profile {
+  display: flex;
+  align-items: center;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #08979C;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.user-name {
+  font-size: 14px;
+  color: #002329;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  background: #f0f0f0;
+  color: #002329;
+}
+
+.project-performance-content {
+  width: 100%;
+}
+
+/* Filters and Tabs */
+.dashboard-filters-tabs {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 24px;
+  flex-wrap: wrap;
+}
+
+/* Tabs on Left */
+.tabs-section-left {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+/* Account Filter in Center */
+.filter-section-center {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  justify-content: center;
+}
+
+.filter-section-center label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #002329;
+  white-space: nowrap;
+}
+
+.account-filter-select {
+  padding: 8px 12px;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: Poppins, sans-serif;
+  background: white;
+  color: #002329;
+  cursor: pointer;
+  min-width: 200px;
+}
+
+.account-filter-select:focus {
+  outline: none;
+  border-color: #08979C;
+  box-shadow: 0 0 0 3px rgba(8, 151, 156, 0.1);
+}
+
+/* Refresh Button on Right */
+.refresh-section-right {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.refresh-btn-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--surface, #ffffff);
+  color: #08979C;
+  border: 1px solid #08979C;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: Poppins, sans-serif;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.refresh-btn-top:hover:not(:disabled) {
+  border-color: #08979C;
+  color: #FFF;
+  background: #08979C;
+}
+
+.refresh-btn-top:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.refresh-btn-top .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Tabs */
+.dashboard-tabs {
+  display: flex;
+  gap: 8px;
+  border-bottom: 2px solid #e8e8e8;
+  padding-bottom: 0;
+}
+
+.tab-button {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #666;
+  font-family: Poppins, sans-serif;
+  transition: all 0.2s;
+  margin-bottom: -2px;
+}
+
+.tab-button:hover {
+  color: #08979C;
+  background: #f0f9fa;
+}
+
+.tab-button.active {
+  color: #08979C;
+  border-bottom-color: #08979C;
+  font-weight: 600;
+}
+
+/* Tab Content - Scoped to Project Performance Dashboard */
+.project-performance .tab-content,
+.project-performance-container .tab-content,
+.project-performance .project-performance-container .tab-content {
+  width: 100%;
+}
+
+/* Loading and Error States - Scoped to Project Performance Dashboard */
+.project-performance .loading-container,
+.project-performance-container .loading-container,
+.project-performance .project-performance-container .loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 200px);
+  padding: 60px 20px;
+  color: #666;
+  width: 100%;
+  text-align: center;
+  gap: 16px;
+}
+
+.project-performance .loading-container .spinner,
+.project-performance-container .loading-container .spinner,
+.project-performance .project-performance-container .loading-container .spinner,
+.project-performance .loading-container .spinning,
+.project-performance-container .loading-container .spinning,
+.project-performance .project-performance-container .loading-container .spinning {
+  animation: spin 1s linear infinite;
+  color: #08979C;
+}
+
+.project-performance .loading-container p,
+.project-performance-container .loading-container p,
+.project-performance .project-performance-container .loading-container p {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+}
+
+/* Error Container - Scoped to Project Performance Dashboard */
+.project-performance .error-container,
+.project-performance-container .error-container,
+.project-performance .project-performance-container .error-container {
+  padding: 24px;
+  background: #fff1f0;
+  border: 1px solid #ffccc7;
+  border-radius: 8px;
+  color: #a8071a;
+  text-align: center;
+}
+
+/* Retry Button - Scoped to Project Performance Dashboard */
+.project-performance .retry-btn,
+.project-performance-container .retry-btn,
+.project-performance .project-performance-container .retry-btn {
+  margin-top: 16px;
+  padding: 8px 16px;
+  background: #ff4d4f;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.project-performance .retry-btn:hover,
+.project-performance-container .retry-btn:hover,
+.project-performance .project-performance-container .retry-btn:hover {
+  background: #cf1322;
+}
+
+/* Section Headers - Scoped to Project Performance Dashboard */
+.project-performance .section-header,
+.project-performance-container .section-header,
+.project-performance .project-performance-container .section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.project-performance .section-header h2,
+.project-performance-container .section-header h2,
+.project-performance .project-performance-container .section-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  color: #002329;
+}
+
+/* Section Actions - Scoped to Project Performance Dashboard */
+.project-performance .section-actions,
+.project-performance-container .section-actions,
+.project-performance .project-performance-container .section-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.project-performance .action-btn,
+.project-performance-container .action-btn,
+.project-performance .project-performance-container .action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: 1px solid #08979C;
+  background: #08979C;
+  color: #FFF;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: Poppins, sans-serif;
+  transition: all 0.2s;
+}
+
+.project-performance .action-btn:hover,
+.project-performance-container .action-btn:hover,
+.project-performance .project-performance-container .action-btn:hover {
+  background: #067a7f;
+  border-color: #067a7f;
+}
+
+/* KPI Cards - Scoped to Project Performance Dashboard */
+.project-performance .kpi-cards,
+.project-performance-container .kpi-cards,
+.project-performance .project-performance-container .kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.project-performance .kpi-card,
+.project-performance-container .kpi-card,
+.project-performance .project-performance-container .kpi-card {
+  background: white;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition: box-shadow 0.2s;
+}
+
+.project-performance .kpi-card:hover,
+.project-performance-container .kpi-card:hover,
+.project-performance .project-performance-container .kpi-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.project-performance .kpi-icon,
+.project-performance-container .kpi-icon,
+.project-performance .project-performance-container .kpi-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.project-performance .kpi-content,
+.project-performance-container .kpi-content,
+.project-performance .project-performance-container .kpi-content {
+  flex: 1;
+}
+
+.project-performance .kpi-label,
+.project-performance-container .kpi-label,
+.project-performance .project-performance-container .kpi-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.project-performance .kpi-value,
+.project-performance-container .kpi-value,
+.project-performance .project-performance-container .kpi-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #002329;
+}
+
+.project-performance .kpi-sublabel,
+.project-performance-container .kpi-sublabel,
+.project-performance .project-performance-container .kpi-sublabel {
+  font-size: 12px;
+  color: #999;
+  margin-top: 4px;
+}
+
+/* Charts Grid - Scoped to Project Performance Dashboard */
+.project-performance .charts-grid,
+.project-performance-container .charts-grid,
+.project-performance .project-performance-container .charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+/* Chart Scroll Container - Scoped to Project Performance Dashboard */
+.project-performance .chart-scroll-container,
+.project-performance-container .chart-scroll-container,
+.project-performance .project-performance-container .chart-scroll-container {
+  overflow-x: auto;
+  overflow-y: hidden;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.project-performance .chart-scroll-container .recharts-wrapper,
+.project-performance-container .chart-scroll-container .recharts-wrapper,
+.project-performance .project-performance-container .chart-scroll-container .recharts-wrapper {
+  min-width: 100%;
+}
+
+.project-performance .chart-scroll-container .recharts-surface,
+.project-performance-container .chart-scroll-container .recharts-surface,
+.project-performance .project-performance-container .chart-scroll-container .recharts-surface {
+  min-width: 600px;
+}
+
+/* Chart Card - Scoped to Project Performance Dashboard */
+.project-performance .chart-card,
+.project-performance-container .chart-card,
+.project-performance .project-performance-container .chart-card {
+  background: white;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.project-performance .chart-card h3,
+.project-performance-container .chart-card h3,
+.project-performance .project-performance-container .chart-card h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 20px 0;
+  color: #002329;
+}
+
+/* Tables */
+.table-container {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.data-table thead {
+  background: #f5f5f5;
+}
+
+.data-table th {
+  padding: 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #002329;
+  border-bottom: 2px solid #e8e8e8;
+}
+
+.data-table td {
+  padding: 12px;
+  border-bottom: 1px solid #e8e8e8;
+  color: #666;
+}
+
+.data-table tbody tr:hover {
+  background: #f9f9f9;
+}
+
+/* Summary Cards */
+.funnel-summary,
+.summary-card {
+  background: white;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.summary-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.summary-value {
+  font-size: 32px;
+  font-weight: 600;
+  color: #08979C;
+}
+
+/* Info Message */
+.info-message {
+  padding: 16px;
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 8px;
+  color: #0050b3;
+  margin-bottom: 24px;
+}
+
+/* Last Refreshed */
+.last-refreshed {
+  text-align: center;
+  color: #999;
+  font-size: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e8e8e8;
+}
+
+.no-data-message {
+  padding: 40px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .project-performance .charts-grid,
+  .project-performance-container .charts-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .project-performance .kpi-cards,
+  .project-performance-container .kpi-cards {
+    grid-template-columns: 1fr;
+  }
+  
+  .header-content {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+

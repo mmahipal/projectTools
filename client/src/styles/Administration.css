@@ -1,0 +1,34 @@
+.administration-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.tab-button {
+  padding: 12px 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 400;
+  color: #666;
+  border-bottom: 2px solid transparent;
+  font-family: Poppins;
+  transition: all 0.2s;
+}
+
+.tab-button:hover {
+  color: #08979C;
+  background: rgba(8, 151, 156, 0.05);
+}
+
+.tab-button.tab-active {
+  color: #08979C;
+  font-weight: 600;
+  border-bottom-color: #08979C;
+}
+
+.administration-content {
+  min-height: calc(100vh - 200px);
+}
+

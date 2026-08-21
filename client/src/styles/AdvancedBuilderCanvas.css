@@ -1,0 +1,89 @@
+/* Advanced Builder Canvas - Scoped Styles */
+
+.advanced-builder-canvas {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 200px);
+  min-height: 600px;
+  gap: 0;
+}
+
+.canvas-layout {
+  display: flex;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.canvas-left-panel {
+  width: 280px;
+  min-width: 200px;
+  max-width: 600px;
+  background: #fff;
+  border-radius: 0;
+  border-right: 1px solid #e5e7eb;
+  box-shadow: none;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  resize: none;
+  position: relative;
+  box-sizing: border-box;
+}
+
+.canvas-left-panel .object-panel {
+  overflow: visible;
+}
+
+.canvas-left-panel .object-panel-header {
+  overflow: visible;
+  flex-shrink: 0;
+}
+
+.resize-handle {
+  width: 6px;
+  cursor: col-resize;
+  background-color: #e5e7eb;
+  flex-shrink: 0;
+  position: relative;
+  transition: background-color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resize-handle::before {
+  content: '';
+  width: 2px;
+  height: 40px;
+  background-color: #cbd5e1;
+  border-radius: 1px;
+  transition: background-color 0.2s;
+}
+
+.resize-handle:hover {
+  background-color: #f1f5f9;
+}
+
+.resize-handle:hover::before {
+  background-color: #08979C;
+}
+
+.resize-handle:active {
+  background-color: #e2e8f0;
+}
+
+.resize-handle:active::before {
+  background-color: #067d82;
+}
+
+.canvas-center-panel {
+  flex: 1;
+  background: #fff;
+  border-radius: 0;
+  overflow: auto;
+  min-width: 0;
+  padding: 12px;
+}
+

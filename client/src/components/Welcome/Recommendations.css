@@ -1,0 +1,79 @@
+.recommendations-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.recommendations-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.recommendations-icon {
+  color: #f59e0b;
+  flex-shrink: 0;
+}
+
+.recommendations-loading {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.recommendations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recommendation-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.recommendation-item:hover {
+  background: var(--bg-tertiary);
+  transform: translateX(4px);
+}
+
+.recommendation-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.recommendation-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.recommendation-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.recommendation-arrow {
+  color: #08979C;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.recommendation-item:hover .recommendation-arrow {
+  transform: translateX(4px);
+}
+

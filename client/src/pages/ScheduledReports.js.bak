@@ -1,0 +1,787 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import { Menu, LogOut, Clock, Plus, Edit, Trash2, Play, Pause, Calendar, Mail, Save, X, RefreshCw } from 'lucide-react';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import DeleteConfirmModal from '../components/ReportBuilder/DeleteConfirmModal';
+import ScheduleReportModal from '../components/ReportBuilder/ScheduleReportModal';
+import EnhancedScheduleOptions from '../components/ReportBuilder/EnhancedScheduleOptions';
+import ReportConfiguration from '../components/ReportBuilder/ReportConfiguration';
+import FilterBuilder from '../components/ReportBuilder/FilterBuilder';
+import FieldSelector from '../components/ReportBuilder/FieldSelector';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+const ScheduledReports = () => {
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingReport, setEditingReport] = useState(null);
+  const [availableObjects, setAvailableObjects] = useState([]);
+  const [availableFields, setAvailableFields] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({});
+  const [formData, setFormData] = useState({
+    name: '',
+    objectType: '',
+    fields: [],
+    filters: {},
+    schedule: 'daily',
+    recipients: [],
+    limit: 10000,
+    groupBy: null,
+    sortBy: null,
+    sortOrder: 'ASC'
+  });
+  const [savedReportConfigs, setSavedReportConfigs] = useState([]);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [formMode, setFormMode] = useState(null); // 'schedule-existing' or 'create-new'
+  const [scheduleConfig, setScheduleConfig] = useState({
+    time: '09:00',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    daysOfWeek: [],
+    dayOfMonth: 1
+  });
+  const [loadingFields, setLoadingFields] = useState(false);
+
+  useEffect(() => {
+    loadReports();
+    loadAvailableObjects();
+    loadSavedReportConfigs();
+  }, []);
+
+  const loadSavedReportConfigs = () => {
+    try {
+      const saved = localStorage.getItem('saved_reports');
+      if (saved) {
+        setSavedReportConfigs(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Error loading saved report configs:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (formData.objectType) {
+      loadFieldsForObject(formData.objectType);
+      loadFilterOptions(formData.objectType);
+    } else {
+      setAvailableFields([]);
+      setFilterOptions({});
+    }
+  }, [formData.objectType]);
+
+  const loadReports = async () => {
+    setLoading(true);
+    try {
+      const response = await apiClient.get('/scheduled-reports');
+      if (response.data.success) {
+        setReports(response.data.reports || []);
+      }
+    } catch (error) {
+      toast.error('Failed to load scheduled reports');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadAvailableObjects = async () => {
+    try {
+      const response = await apiClient.get('/update-object-fields/objects');
+      if (response.data.success) {
+        setAvailableObjects(response.data.objects || []);
+      }
+    } catch (error) {
+      console.error('Error loading objects:', error);
+    }
+  };
+
+  const loadFieldsForObject = async (objectType) => {
+    setLoadingFields(true);
+    try {
+      // Add forReporting=true query parameter to include read-only fields
+      const response = await apiClient.get(`/update-object-fields/fields/${encodeURIComponent(objectType)}?forReporting=true`);
+      if (response.data.success) {
+        setAvailableFields(response.data.fields || []);
+      } else {
+        toast.error(response.data.error || 'Failed to load fields');
+      }
+    } catch (error) {
+      console.error('Error loading fields:', error);
+      toast.error(error.response?.data?.error || 'Failed to load fields');
+      setAvailableFields([]);
+    } finally {
+      setLoadingFields(false);
+    }
+  };
+
+  const loadFilterOptions = async (objectType) => {
+    try {
+      const response = await apiClient.get(`/update-object-fields/filter-options/${encodeURIComponent(objectType)}`);
+      if (response.data.success) {
+        setFilterOptions(response.data.filterOptions || {});
+      }
+    } catch (error) {
+      console.error('Error loading filter options:', error);
+    }
+  };
+
+  const handleSchedule = async () => {
+    if (!formData.name || !formData.objectType) {
+      toast.error('Name and object type are required');
+      return;
+    }
+    if (formData.fields.length === 0) {
+      toast.error('Please select at least one field');
+      return;
+    }
+    
+    // Validate schedule config based on schedule type
+    if (formData.schedule === 'weekly' && (!scheduleConfig.daysOfWeek || scheduleConfig.daysOfWeek.length === 0)) {
+      toast.error('Please select at least one day of the week');
+      return;
+    }
+
+    const payload = {
+      ...formData,
+      scheduleConfig: scheduleConfig
+    };
+
+    try {
+      const response = editingReport
+        ? await apiClient.put(`/scheduled-reports/${editingReport.id}`, payload)
+        : await apiClient.post('/scheduled-reports', payload);
+      
+      if (response.data.success) {
+        toast.success(`Scheduled report ${editingReport ? 'updated' : 'created'}`);
+        setShowForm(false);
+        setEditingReport(null);
+        resetForm();
+        loadReports();
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.error || `Failed to ${editingReport ? 'update' : 'create'} scheduled report`);
+    }
+  };
+
+  const handleFieldToggle = (fieldName) => {
+    if (formData.fields.includes(fieldName)) {
+      setFormData({
+        ...formData,
+        fields: formData.fields.filter(f => f !== fieldName)
+      });
+    } else {
+      setFormData({
+        ...formData,
+        fields: [...formData.fields, fieldName]
+      });
+    }
+  };
+
+  const updateFilter = (newFilters) => {
+    setFormData({
+      ...formData,
+      filters: newFilters
+    });
+  };
+
+  const handleDelete = (id) => {
+    setReportToDelete(id);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!reportToDelete) return;
+
+    try {
+      const response = await apiClient.delete(`/scheduled-reports/${reportToDelete}`);
+      if (response.data.success) {
+        toast.success('Scheduled report deleted');
+        loadReports();
+      }
+    } catch (error) {
+      toast.error('Failed to delete scheduled report');
+    } finally {
+      setShowDeleteConfirm(false);
+      setReportToDelete(null);
+    }
+  };
+
+  const handleToggle = async (report) => {
+    try {
+      const response = await apiClient.put(`/scheduled-reports/${report.id}`, {
+        enabled: !report.enabled
+      });
+      if (response.data.success) {
+        toast.success(`Report ${report.enabled ? 'disabled' : 'enabled'}`);
+        loadReports();
+      }
+    } catch (error) {
+      toast.error('Failed to toggle report');
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      objectType: '',
+      fields: [],
+      filters: {},
+      schedule: 'daily',
+      recipients: [],
+      limit: 10000,
+      groupBy: null,
+      sortBy: null,
+      sortOrder: 'ASC'
+    });
+    setScheduleConfig({
+      time: '09:00',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      daysOfWeek: [],
+      dayOfMonth: 1
+    });
+    setFormMode(null);
+  };
+
+  const startEdit = (report) => {
+    setEditingReport(report);
+    setFormData({
+      name: report.name,
+      objectType: report.objectType,
+      fields: report.fields || [],
+      filters: report.filters || {},
+      schedule: report.schedule || 'daily',
+      recipients: report.recipients || [],
+      limit: report.limit || 10000,
+      groupBy: report.groupBy || null,
+      sortBy: report.sortBy || null,
+      sortOrder: report.sortOrder || 'ASC'
+    });
+    // Load schedule config if available
+    if (report.scheduleConfig) {
+      setScheduleConfig(report.scheduleConfig);
+    }
+    setFormMode('create-new');
+    setShowForm(true);
+  };
+
+  const handleScheduleExistingReport = (report) => {
+    setFormData({
+      name: report.name,
+      objectType: report.objectType,
+      fields: report.fields || [],
+      filters: report.filters || {},
+      schedule: 'daily',
+      recipients: [],
+      limit: report.limit || 10000,
+      groupBy: report.groupBy || null,
+      sortBy: report.sortBy || null,
+      sortOrder: report.sortOrder || 'ASC'
+    });
+    setScheduleConfig({
+      time: '09:00',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      daysOfWeek: [],
+      dayOfMonth: 1
+    });
+    setFormMode('schedule-existing');
+    setShowForm(true);
+    setShowScheduleModal(false);
+    // Load fields and filters for the selected report
+    if (report.objectType) {
+      loadFieldsForObject(report.objectType);
+      loadFilterOptions(report.objectType);
+    }
+  };
+
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      
+      <div style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease', transition: 'margin-left 0.3s ease', width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 80px)' }}>
+        <header className="dashboard-header">
+          <div className="header-content">
+            <div className="header-left">
+              <button 
+                className="header-menu-toggle"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                aria-label="Toggle sidebar"
+              >
+                <Menu size={20} />
+              </button>
+              <div>
+                <h1 className="page-title">Scheduled Reports</h1>
+                <p className="page-subtitle">Create and manage automated reports</p>
+              </div>
+            </div>
+            <div className="header-user-profile">
+              <div className="user-profile">
+                <div className="user-avatar">
+                  {(user?.email || 'U').charAt(0).toUpperCase()}
+                </div>
+                <span className="user-name">{user?.email || 'User'}</span>
+                <button className="logout-btn" onClick={logout} title="Logout">
+                  <LogOut size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main style={{ padding: '24px', background: '#f5f5f5', minHeight: 'calc(100vh - 80px)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '600', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={24} color="#08979C" />
+              Scheduled Reports
+            </h2>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              {savedReportConfigs.length > 0 && (
+                <button
+                  onClick={() => setShowScheduleModal(true)}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#08979C',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: '600',
+                    fontFamily: 'Poppins',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+                  onMouseLeave={(e) => e.target.style.opacity = '1'}
+                >
+                  <Clock size={16} />
+                  Schedule Existing Report
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setEditingReport(null);
+                  resetForm();
+                  setFormMode('create-new');
+                  setShowForm(true);
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: '#08979C',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: '600',
+                  fontFamily: 'Poppins',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+                onMouseLeave={(e) => e.target.style.opacity = '1'}
+              >
+                <Plus size={16} />
+                Create New Scheduled Report
+              </button>
+            </div>
+          </div>
+
+          {showForm && (
+            <div style={{ marginBottom: '24px', padding: '24px', background: '#fff', borderRadius: '8px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>
+                  {formMode === 'schedule-existing' ? 'Schedule Existing Report' : editingReport ? 'Edit Scheduled Report' : 'Create New Scheduled Report'}
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditingReport(null);
+                    resetForm();
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px'
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {formMode === 'schedule-existing' ? (
+                // Schedule Existing Report - Only show schedule options
+                <div>
+                  <div style={{ marginBottom: '16px', padding: '12px', background: '#f0fdfa', borderRadius: '6px', border: '1px solid #08979C' }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '4px' }}>{formData.name}</div>
+                    <div style={{ fontSize: '12px', color: '#666' }}>
+                      {formData.objectType} • {formData.fields?.length || 0} field(s)
+                    </div>
+                  </div>
+                  
+                  <EnhancedScheduleOptions
+                    schedule={formData.schedule}
+                    scheduleConfig={scheduleConfig}
+                    onScheduleChange={(schedule) => setFormData({ ...formData, schedule })}
+                    onConfigChange={setScheduleConfig}
+                  />
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
+                    <button
+                      onClick={handleSchedule}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#08979C',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        fontFamily: 'Poppins',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+                      onMouseLeave={(e) => e.target.style.opacity = '1'}
+                    >
+                      <Clock size={16} />
+                      Schedule
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowForm(false);
+                        setEditingReport(null);
+                        resetForm();
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#fff',
+                        color: '#666',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        fontFamily: 'Poppins',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+                      onMouseLeave={(e) => e.target.style.background = '#fff'}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // Create New Scheduled Report - Show ReportBuilder components + schedule options
+                <div>
+                  {/* Report Configuration using ReportBuilder components */}
+                  <div style={{ marginBottom: '24px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px', marginBottom: '12px' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
+                          Report Name *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          placeholder="Enter report name"
+                          style={{
+                            width: '100%',
+                            padding: '6px 10px',
+                            border: '1px solid #d9d9d9',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
+                          Record Limit
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.limit}
+                          onChange={(e) => setFormData({ ...formData, limit: parseInt(e.target.value) || 10000 })}
+                          min="1"
+                          max="10000"
+                          style={{
+                            width: '100%',
+                            padding: '6px 10px',
+                            border: '1px solid #d9d9d9',
+                            borderRadius: '4px',
+                            fontSize: '12px'
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ marginBottom: '12px' }}>
+                      <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
+                        Object Type *
+                      </label>
+                      <select
+                        value={formData.objectType}
+                        onChange={(e) => setFormData({ ...formData, objectType: e.target.value, fields: [], filters: {} })}
+                        style={{
+                          width: '100%',
+                          padding: '6px 10px',
+                          border: '1px solid #d9d9d9',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          background: '#fff'
+                        }}
+                      >
+                        <option value="">Select Object Type</option>
+                        {availableObjects.map(obj => (
+                          <option key={obj.value} value={obj.value}>{obj.label}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {formData.objectType && (
+                      <>
+                        <div style={{ marginBottom: '12px' }}>
+                          <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
+                            Fields * (Select at least one)
+                          </label>
+                          <FieldSelector
+                            availableFields={availableFields}
+                            selectedFields={formData.fields}
+                            onFieldToggle={handleFieldToggle}
+                          />
+                        </div>
+
+                        {filterOptions && Object.keys(filterOptions).length > 0 && (
+                          <div style={{ marginBottom: '12px' }}>
+                            <label style={{ display: 'block', fontSize: '12px', fontWeight: '500', marginBottom: '4px' }}>
+                              Filters (Optional)
+                            </label>
+                            <FilterBuilder
+                              availableFields={availableFields}
+                              filterOptions={filterOptions}
+                              filters={formData.filters}
+                              onFiltersChange={updateFilter}
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Schedule Options */}
+                  <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '20px', marginTop: '20px' }}>
+                    <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '16px' }}>Schedule Options</h4>
+                    <EnhancedScheduleOptions
+                      schedule={formData.schedule}
+                      scheduleConfig={scheduleConfig}
+                      onScheduleChange={(schedule) => setFormData({ ...formData, schedule })}
+                      onConfigChange={setScheduleConfig}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
+                    <button
+                      onClick={handleSchedule}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#08979C',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        fontFamily: 'Poppins',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.opacity = '0.9'}
+                      onMouseLeave={(e) => e.target.style.opacity = '1'}
+                    >
+                      <Clock size={16} />
+                      Schedule
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowForm(false);
+                        setEditingReport(null);
+                        resetForm();
+                      }}
+                      style={{
+                        padding: '8px 16px',
+                        background: '#fff',
+                        color: '#666',
+                        border: '1px solid #d9d9d9',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '13px',
+                        fontWeight: '600',
+                        fontFamily: 'Poppins',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+                      onMouseLeave={(e) => e.target.style.background = '#fff'}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+              <RefreshCw size={32} className="spinner" style={{ marginBottom: '12px' }} />
+              <p>Loading...</p>
+            </div>
+          ) : reports.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px', color: '#666', background: '#fff', borderRadius: '8px' }}>
+              <Clock size={32} style={{ marginBottom: '12px', opacity: 0.5 }} />
+              <p>No scheduled reports. Create one to get started.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {reports.map(report => (
+                <div
+                  key={report.id}
+                  style={{
+                    padding: '16px',
+                    background: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '6px',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+                  }}
+                >
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                      <h4 style={{ fontSize: '14px', fontWeight: '600', margin: 0 }}>{report.name}</h4>
+                      <span
+                        style={{
+                          padding: '2px 8px',
+                          background: report.enabled ? '#d1fae5' : '#fee2e2',
+                          color: report.enabled ? '#065f46' : '#991b1b',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        {report.enabled ? 'Active' : 'Paused'}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#666', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <Calendar size={12} />
+                        {report.schedule}
+                      </span>
+                      <span>{report.objectType}</span>
+                      <span>{report.fields?.length || 0} field(s)</span>
+                      {report.lastRunAt && (
+                        <span>Last run: {new Date(report.lastRunAt).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => handleToggle(report)}
+                      style={{
+                        padding: '6px 12px',
+                        background: report.enabled ? '#fef3c7' : '#d1fae5',
+                        color: report.enabled ? '#92400e' : '#065f46',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      {report.enabled ? <Pause size={14} /> : <Play size={14} />}
+                      {report.enabled ? 'Pause' : 'Resume'}
+                    </button>
+                    <button
+                      onClick={() => startEdit(report)}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#e0e7ff',
+                        color: '#3730a3',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Edit size={14} />
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(report.id)}
+                      style={{
+                        padding: '6px 12px',
+                        background: '#fee2e2',
+                        color: '#991b1b',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '12px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
+      </div>
+      <DeleteConfirmModal
+        show={showDeleteConfirm}
+        onConfirm={confirmDelete}
+        onCancel={() => {
+          setShowDeleteConfirm(false);
+          setReportToDelete(null);
+        }}
+      />
+      <ScheduleReportModal
+        show={showScheduleModal}
+        savedReports={savedReportConfigs}
+        onClose={() => setShowScheduleModal(false)}
+        onSelect={handleScheduleExistingReport}
+      />
+    </div>
+  );
+};
+
+export default ScheduledReports;
+

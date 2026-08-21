@@ -1,0 +1,2111 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import ClientToolAccountValidationWarning from '../components/ClientToolAccountValidationWarning';
+import ClientToolAccountAnalytics from '../components/ClientToolAccountAnalytics';
+import { Menu, LogOut, Plus, Search, Check, X, RefreshCw, Wrench, Link as LinkIcon, Send, Edit, Loader, Download, Upload, FileText, AlertTriangle, BarChart3 } from 'lucide-react';
+import apiClient from '../config/api';
+import axios from 'axios';
+import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
+import BookmarkButton from '../components/BookmarkButton';
+import { detectDuplicateMappings, detectExistingMapping, getAllConflicts } from '../utils/clientToolAccountConflictDetection';
+import { checkAccountAvailability } from '../utils/clientToolAccountAvailability';
+import { checkAccountStatus } from '../utils/clientToolAccountStatusCheck';
+import { validateBulkAssignment } from '../utils/clientToolAccountValidation';
+import '../styles/ClientToolAccount.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+const ClientToolAccount = () => {
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [loading, setLoading] = useState(true);
+  const [contributorProjects, setContributorProjects] = useState([]);
+  const [filteredContributorProjects, setFilteredContributorProjects] = useState([]);
+  const [contributorProjectsSearchTerm, setContributorProjectsSearchTerm] = useState('');
+  const [hasMoreProjects, setHasMoreProjects] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const infiniteScrollRef = useRef(null); // Ref for infinite scroll trigger
+  const tableContainerRef = useRef(null); // Ref for table container
+  const contributorProjectsRef = useRef([]); // Ref to track current projects for offset calculation
+  const hasMoreProjectsRef = useRef(false); // Ref to track hasMoreProjects state
+  const loadingMoreRef = useRef(false); // Ref to track loadingMore state
+  const contributorProjectsSearchTermRef = useRef(''); // Ref to track search term
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [isUpdateMode, setIsUpdateMode] = useState(false);
+  const [selectedAccountId, setSelectedAccountId] = useState(null);
+  const [accountSearchResultsForUpdate, setAccountSearchResultsForUpdate] = useState([]);
+  const [searchingAccountForUpdate, setSearchingAccountForUpdate] = useState(false);
+  const [selectedAccounts, setSelectedAccounts] = useState({}); // { projectId: accountId }
+  const [bulkSelectedProjects, setBulkSelectedProjects] = useState([]);
+  const [clientToolNamePicklist, setClientToolNamePicklist] = useState([]);
+  const [searchResultsPerProject, setSearchResultsPerProject] = useState({}); // { projectId: [results] }
+  const [searchTermsPerProject, setSearchTermsPerProject] = useState({}); // { projectId: searchTerm }
+  const [searchingPerProject, setSearchingPerProject] = useState({}); // { projectId: boolean }
+  const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef(null);
+  const [activeTab, setActiveTab] = useState('management'); // 'management', 'analytics'
+  
+  // Validation states
+  const [validationWarnings, setValidationWarnings] = useState({}); // { projectId: [warnings] }
+  const [validationConflicts, setValidationConflicts] = useState({}); // { projectId: [conflicts] }
+  const [accountStatusChecks, setAccountStatusChecks] = useState({}); // { accountId: status }
+  
+  const [formData, setFormData] = useState({
+    clientToolAccountName: '',
+    contributor: '',
+    contributorId: '',
+    contributorName: '',
+    clientToolUserId: '',
+    account: '',
+    accountId: '',
+    accountName: '',
+    otpLimitExceeded: false,
+    deactivated: false,
+    lastChangedDate: '',
+    lastChangedTime: '',
+    clientToolName: '',
+    clientToolEmail: '',
+    verified: false
+  });
+  
+  // Search states for Contributor and Account
+  const [contributorSearchTerm, setContributorSearchTerm] = useState('');
+  const [contributorSearchResults, setContributorSearchResults] = useState([]);
+  const [contributorSearching, setContributorSearching] = useState(false);
+  const [accountSearchTerm, setAccountSearchTerm] = useState('');
+  const [accountSearchResults, setAccountSearchResults] = useState([]);
+  const [accountSearching, setAccountSearching] = useState(false);
+
+  useEffect(() => {
+    fetchContributorProjects();
+    fetchClientToolNamePicklist();
+  }, []);
+
+  // Filter is now done server-side, so we just use the projects as-is
+  // But we still need to update when search term changes to trigger a new fetch
+  useEffect(() => {
+    // When search term changes, reset and fetch with new search (don't append)
+    if (!loading) {
+      setContributorProjects([]); // Clear existing projects
+      fetchContributorProjects(false); // Fetch from beginning
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [contributorProjectsSearchTerm]);
+
+  // Update filtered list when projects change (no client-side filtering needed)
+  useEffect(() => {
+    setFilteredContributorProjects(contributorProjects);
+    contributorProjectsRef.current = contributorProjects; // Keep ref in sync
+  }, [contributorProjects]);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    hasMoreProjectsRef.current = hasMoreProjects;
+  }, [hasMoreProjects]);
+
+  useEffect(() => {
+    loadingMoreRef.current = loadingMore;
+  }, [loadingMore]);
+
+  useEffect(() => {
+    contributorProjectsSearchTermRef.current = contributorProjectsSearchTerm;
+  }, [contributorProjectsSearchTerm]);
+
+  const fetchContributorProjects = useCallback(async (append = false) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      // Reset state when refreshing
+      setHasMoreProjects(false);
+    }
+    try {
+      // Use ref to get current length when appending (avoids stale closure)
+      const offset = append ? contributorProjectsRef.current.length : 0;
+      
+      // Build query parameters with search filter
+      const params = new URLSearchParams({
+        limit: '1000',
+        offset: offset.toString()
+      });
+      
+      // Add search term if provided
+      if (contributorProjectsSearchTerm && contributorProjectsSearchTerm.trim() !== '') {
+        params.append('searchTerm', contributorProjectsSearchTerm.trim());
+      }
+      
+      const response = await apiClient.get(`/client-tool-account/contributor-projects?${params.toString()}`);
+      if (response.data.success) {
+        if (append) {
+          // Append new records to existing ones
+          setContributorProjects(prev => {
+            const newProjects = [...prev, ...(response.data.projects || [])];
+            return newProjects;
+          });
+        } else {
+          // Replace existing records
+          setContributorProjects(response.data.projects || []);
+        }
+        setHasMoreProjects(response.data.hasMore || false);
+      }
+    } catch (error) {
+      toast.error('Failed to fetch contributor projects');
+    } finally {
+      if (append) {
+        setLoadingMore(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  }, [contributorProjectsSearchTerm]);
+
+  // Refresh handler that ensures proper reset
+  const handleRefresh = useCallback((e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Clear existing projects
+    setContributorProjects([]);
+    // Reset refs
+    contributorProjectsRef.current = [];
+    hasMoreProjectsRef.current = false;
+    setHasMoreProjects(false);
+    // Fetch fresh data
+    fetchContributorProjects(false);
+  }, [fetchContributorProjects]);
+
+  // Function to load more projects (extracted for reuse)
+  const loadMoreProjects = useCallback(() => {
+    // Use refs to check current state (avoid stale closures)
+    const currentHasMore = hasMoreProjectsRef.current;
+    const currentLoading = loadingMoreRef.current;
+    
+    if (currentLoading || !currentHasMore) {
+      return;
+    }
+    
+    const currentOffset = contributorProjectsRef.current.length;
+    
+    // Prevent multiple simultaneous loads
+    if (loadingMoreRef.current) {
+      return;
+    }
+    
+    // Call fetch directly to avoid callback dependency issues
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    
+    const params = new URLSearchParams({
+      limit: '1000',
+      offset: currentOffset.toString()
+    });
+    
+    // Get current search term from ref
+    const currentSearchTerm = contributorProjectsSearchTermRef.current;
+    
+    if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+      params.append('searchTerm', currentSearchTerm.trim());
+    }
+    
+      apiClient.get(`/client-tool-account/contributor-projects?${params.toString()}`)
+      .then(response => {
+        if (response.data.success) {
+          setContributorProjects(prev => {
+            const newProjects = [...prev, ...(response.data.projects || [])];
+            return newProjects;
+          });
+          setHasMoreProjects(response.data.hasMore || false);
+          hasMoreProjectsRef.current = response.data.hasMore || false;
+        }
+      })
+      .catch(error => {
+        toast.error('Failed to fetch more contributor projects');
+      })
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  }, []);
+
+  // Set up IntersectionObserver for infinite scroll
+  useEffect(() => {
+    // Wait for element to be available in DOM
+    const setupObserver = () => {
+      const element = infiniteScrollRef.current;
+      const tableContainer = tableContainerRef.current;
+      
+      if (!element || !hasMoreProjects || loadingMore) {
+        return null;
+      }
+      
+      // If table container is not available yet, return null to retry
+      if (!tableContainer) {
+        return null;
+      }
+
+      let loadTriggered = false; // Prevent multiple loads
+
+      const handleIntersection = (entries) => {
+        const entry = entries[0];
+        
+        if (entry.isIntersecting && !loadTriggered) {
+          loadTriggered = true;
+          loadMoreProjects();
+          
+          // Reset flag after a delay to allow next load
+          setTimeout(() => {
+            loadTriggered = false;
+          }, 2000);
+        }
+      };
+
+      // Also listen to scroll events as a fallback
+      const handleScroll = () => {
+        if (loadTriggered || loadingMoreRef.current || !hasMoreProjectsRef.current) {
+          return;
+        }
+        
+        if (!element) return;
+        
+        if (tableContainer) {
+          const containerRect = tableContainer.getBoundingClientRect();
+          const elementRect = element.getBoundingClientRect();
+          const isVisible = elementRect.top <= containerRect.bottom + 200;
+          
+          if (isVisible) {
+            loadTriggered = true;
+            loadMoreProjects();
+            
+            setTimeout(() => {
+              loadTriggered = false;
+            }, 2000);
+          }
+        } else {
+          // Fallback to window scroll
+          const rect = element.getBoundingClientRect();
+          const isVisible = rect.top <= window.innerHeight + 200;
+          
+          if (isVisible) {
+            loadTriggered = true;
+            loadMoreProjects();
+            
+            setTimeout(() => {
+              loadTriggered = false;
+            }, 2000);
+          }
+        }
+      };
+
+      const rootElement = tableContainer || null;
+
+      const observer = new IntersectionObserver(handleIntersection, {
+        root: rootElement,
+        rootMargin: '200px',
+        threshold: [0, 0.1, 0.5, 1.0] // Multiple thresholds for better detection
+      });
+
+      observer.observe(element);
+
+      // Add scroll listener as fallback - use table container if available, otherwise window
+      const scrollTarget = tableContainer || window;
+      scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
+
+      // Check if element is already visible (might trigger immediately)
+      const checkVisibility = () => {
+        if (!element) return;
+        if (tableContainer) {
+          const containerRect = tableContainer.getBoundingClientRect();
+          const elementRect = element.getBoundingClientRect();
+          const isVisible = elementRect.top < containerRect.bottom + 200;
+          
+          if (isVisible && hasMoreProjectsRef.current && !loadingMoreRef.current && !loadTriggered) {
+            loadTriggered = true;
+            loadMoreProjects();
+            
+            setTimeout(() => {
+              loadTriggered = false;
+            }, 2000);
+          }
+        } else {
+          // Fallback to window
+          const rect = element.getBoundingClientRect();
+          const isVisible = rect.top < window.innerHeight + 200;
+          
+          if (isVisible && hasMoreProjectsRef.current && !loadingMoreRef.current && !loadTriggered) {
+            loadTriggered = true;
+            loadMoreProjects();
+            
+            setTimeout(() => {
+              loadTriggered = false;
+            }, 2000);
+          }
+        }
+      };
+
+      // Check visibility after a short delay to ensure DOM is ready
+      const visibilityTimeout = setTimeout(checkVisibility, 300);
+
+      return () => {
+        observer.disconnect();
+        const scrollTarget = tableContainer || window;
+        scrollTarget.removeEventListener('scroll', handleScroll);
+        clearTimeout(visibilityTimeout);
+      };
+    };
+
+    // Try to set up immediately
+    let cleanup = setupObserver();
+    
+    // If element not available, retry after a short delay
+    if (!cleanup) {
+      const retryTimeout = setTimeout(() => {
+        cleanup = setupObserver();
+      }, 500);
+      
+      return () => {
+        clearTimeout(retryTimeout);
+        if (cleanup) cleanup();
+      };
+    }
+    
+    return cleanup;
+  }, [hasMoreProjects, loadingMore, loadMoreProjects, filteredContributorProjects.length]);
+
+  const fetchClientToolNamePicklist = async () => {
+    try {
+      const response = await apiClient.get('/client-tool-account/picklist-values');
+      if (response.data.success) {
+        setClientToolNamePicklist(response.data.values || []);
+      }
+    } catch (error) {
+      // Silently fail - picklist values are optional
+    }
+  };
+
+  const searchClientToolAccounts = async (searchTerm, projectId = null) => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      if (projectId) {
+        setSearchResultsPerProject(prev => ({ ...prev, [projectId]: [] }));
+      }
+      return;
+    }
+
+    if (projectId) {
+      setSearchingPerProject(prev => ({ ...prev, [projectId]: true }));
+    }
+
+    try {
+      const response = await apiClient.get(`/client-tool-account/search?term=${encodeURIComponent(searchTerm)}`);
+      if (response.data.success) {
+        if (projectId) {
+          setSearchResultsPerProject(prev => ({ ...prev, [projectId]: response.data.accounts || [] }));
+        }
+      }
+    } catch (error) {
+      toast.error('Failed to search client tool accounts');
+    } finally {
+      if (projectId) {
+        setSearchingPerProject(prev => ({ ...prev, [projectId]: false }));
+      }
+    }
+  };
+
+  // Debounce timer refs
+  const projectSearchDebounceTimerRef = useRef({});
+
+  const handleProjectSearchChange = (projectId, value) => {
+    setSearchTermsPerProject(prev => ({ ...prev, [projectId]: value }));
+    
+    // Clear existing timer for this project
+    if (projectSearchDebounceTimerRef.current[projectId]) {
+      clearTimeout(projectSearchDebounceTimerRef.current[projectId]);
+    }
+    
+    // Set new timer to search after user stops typing (500ms delay)
+    if (value.trim().length >= 2) {
+      projectSearchDebounceTimerRef.current[projectId] = setTimeout(() => {
+        searchClientToolAccounts(value, projectId);
+      }, 500);
+    } else {
+      setSearchResultsPerProject(prev => ({ ...prev, [projectId]: [] }));
+    }
+  };
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(projectSearchDebounceTimerRef.current).forEach(timer => {
+        if (timer) clearTimeout(timer);
+      });
+    };
+  }, []);
+
+  // Search for existing client tool accounts when in update mode
+  const searchClientToolAccountsForUpdate = async (searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setAccountSearchResultsForUpdate([]);
+      return;
+    }
+    setSearchingAccountForUpdate(true);
+    try {
+      const response = await apiClient.get(`/client-tool-account/search?term=${encodeURIComponent(searchTerm)}`);
+      if (response.data.success) {
+        setAccountSearchResultsForUpdate(response.data.accounts || []);
+      }
+    } catch (error) {
+      setAccountSearchResultsForUpdate([]);
+    } finally {
+      setSearchingAccountForUpdate(false);
+    }
+  };
+
+  // Fetch account details and populate form
+  const fetchAccountDetails = async (accountId) => {
+    try {
+      const response = await apiClient.get(`/client-tool-account/${accountId}`);
+      if (response.data.success && response.data.account) {
+        const account = response.data.account;
+        
+        // Parse Last_Changed_At__c if it exists
+        let lastChangedDate = '';
+        let lastChangedTime = '';
+        if (account.lastChangedAt) {
+          const dateObj = new Date(account.lastChangedAt);
+          lastChangedDate = dateObj.toISOString().split('T')[0];
+          const timeStr = dateObj.toTimeString().split(' ')[0];
+          lastChangedTime = timeStr.substring(0, 5); // HH:MM format
+        }
+
+        setFormData({
+          clientToolAccountName: account.name || account.accountName || '',
+          contributor: account.contributor || account.contributorId || '',
+          contributorId: account.contributorId || account.contributor || '',
+          contributorName: account.contributorName || '',
+          clientToolUserId: account.clientToolUserId || '',
+          account: account.account || account.accountId || '',
+          accountId: account.accountId || account.account || '',
+          accountName: account.accountName || account.name || '',
+          otpLimitExceeded: account.otpLimitExceeded || false,
+          deactivated: account.deactivated || false,
+          lastChangedDate: lastChangedDate,
+          lastChangedTime: lastChangedTime,
+          clientToolName: account.clientToolName || '',
+          clientToolEmail: account.clientToolEmail || '',
+          verified: account.verified || false
+        });
+
+        // Set search terms for display
+        if (account.contributorName) {
+          setContributorSearchTerm(account.contributorName);
+        }
+        if (account.accountName || account.name) {
+          setAccountSearchTerm(account.accountName || account.name);
+        }
+      }
+    } catch (error) {
+      toast.error('Failed to fetch account details');
+    }
+  };
+
+  // Handle Client Tool Account Name change in update mode - trigger search
+  const handleClientToolAccountNameChangeInUpdateMode = (value) => {
+    setFormData({ ...formData, clientToolAccountName: value });
+    
+    // If in update mode and no account selected yet, search for accounts by name
+    if (isUpdateMode && !selectedAccountId && value && value.trim().length >= 2) {
+      // Debounce the search
+      if (updateAccountSearchDebounceRef.current) {
+        clearTimeout(updateAccountSearchDebounceRef.current);
+      }
+      updateAccountSearchDebounceRef.current = setTimeout(() => {
+        searchClientToolAccountsForUpdate(value);
+      }, 500);
+    } else if (isUpdateMode && !selectedAccountId && (!value || value.trim().length < 2)) {
+      // Clear search results if value is too short
+      setAccountSearchResultsForUpdate([]);
+    }
+  };
+
+  const handleCreateClientToolAccount = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (isUpdateMode) {
+      // Handle update
+      if (!selectedAccountId) {
+        toast.error('Please select a Client Tool Account to update');
+        return;
+      }
+      setUpdating(true);
+      try {
+        const submitData = {
+          clientToolAccountName: formData.clientToolAccountName,
+          contributor: formData.contributorId || formData.contributor,
+          clientToolUserId: formData.clientToolUserId,
+          account: formData.accountId || formData.account,
+          accountName: formData.accountName || formData.clientToolAccountName,
+          otpLimitExceeded: formData.otpLimitExceeded,
+          deactivated: formData.deactivated,
+          lastChangedDate: formData.lastChangedDate,
+          lastChangedTime: formData.lastChangedTime,
+          clientToolName: formData.clientToolName,
+          clientToolEmail: formData.clientToolEmail,
+          verified: formData.verified
+        };
+        
+        const response = await apiClient.put(`/client-tool-account/${selectedAccountId}`, submitData);
+        if (response.data.success) {
+          toast.success('Client Tool Account updated successfully');
+          setShowCreateForm(false);
+          setIsUpdateMode(false);
+          setSelectedAccountId(null);
+          resetForm();
+          fetchContributorProjects();
+        }
+      } catch (error) {
+        const errorMessage = error.response?.data?.error || 'Failed to update client tool account';
+        toast.error(errorMessage);
+      } finally {
+        setUpdating(false);
+      }
+    } else {
+      // Handle create
+      setCreating(true);
+      try {
+        const submitData = {
+          clientToolAccountName: formData.clientToolAccountName,
+          contributor: formData.contributorId || formData.contributor,
+          clientToolUserId: formData.clientToolUserId,
+          account: formData.accountId || formData.account,
+          accountName: formData.accountName || formData.clientToolAccountName,
+          otpLimitExceeded: formData.otpLimitExceeded,
+          deactivated: formData.deactivated,
+          lastChangedDate: formData.lastChangedDate,
+          lastChangedTime: formData.lastChangedTime,
+          clientToolName: formData.clientToolName,
+          clientToolEmail: formData.clientToolEmail,
+          verified: formData.verified
+        };
+        
+        const response = await apiClient.post('/client-tool-account/create', submitData);
+        if (response.data.success) {
+          toast.success('Client Tool Account created successfully');
+          setShowCreateForm(false);
+          resetForm();
+          fetchContributorProjects();
+        }
+      } catch (error) {
+        const errorMessage = error.response?.data?.error || 'Failed to create client tool account';
+        toast.error(errorMessage);
+      } finally {
+        setCreating(false);
+      }
+    }
+  };
+
+  const handleUpdateMapping = async (projectId, accountId) => {
+    setUpdating(true);
+    try {
+      const response = await apiClient.post('/client-tool-account/update-mapping', {
+        projectId,
+        accountId
+      });
+      if (response.data.success) {
+        toast.success('Client Tool Account mapping updated successfully');
+        fetchContributorProjects();
+        setSelectedAccounts(prev => {
+          const updated = { ...prev };
+          delete updated[projectId];
+          return updated;
+        });
+        // Clear search results for this project
+        setSearchResultsPerProject(prev => {
+          const updated = { ...prev };
+          delete updated[projectId];
+          return updated;
+        });
+        setSearchTermsPerProject(prev => {
+          const updated = { ...prev };
+          delete updated[projectId];
+          return updated;
+        });
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to update mapping';
+      toast.error(errorMessage);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const handleExportToExcel = () => {
+    if (filteredContributorProjects.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    try {
+      // Prepare data for export - must include required columns for import
+      const exportData = filteredContributorProjects.map(project => ({
+        'Contributor Project Name': project.contributorProjectName || 'N/A',
+        'Client Tool Account Name': project.clientToolAccountUsedName || project.clientToolAccountUsed || 'Not Set',
+        'Project': project.project || 'N/A'
+      }));
+
+      // Create workbook and worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Client Tool Accounts');
+
+      // Generate filename with timestamp
+      const filename = `Client_Tool_Accounts_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Write and download
+      XLSX.writeFile(wb, filename);
+      toast.success(`Exported ${exportData.length} records to Excel`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      toast.error('Failed to export to Excel');
+    }
+  };
+
+  const handleDownloadTemplate = () => {
+    try {
+      // Create template with headers and example row
+      const templateData = [
+        {
+          'Contributor Project Name': 'Example Contributor Project',
+          'Project': 'Example Project',
+          'Client Tool Account Name': 'Example Client Tool Account',
+          'Client Tool Name': 'Tool Name',
+          'Client Tool Email': 'email@example.com',
+          'Client Tool User ID': 'user123',
+          'Contributor': 'Contributor Name',
+          'Account': 'Account Name',
+          'OTP Limit Exceeded': false,
+          'Deactivated': false,
+          'Verified': false
+        }
+      ];
+
+      const ws = XLSX.utils.json_to_sheet(templateData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Template');
+
+      // Generate filename
+      const filename = `Client_Tool_Account_Import_Template.xlsx`;
+
+      // Write and download
+      XLSX.writeFile(wb, filename);
+      toast.success('Template downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      toast.error('Failed to download template');
+    }
+  };
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    const validExtensions = ['.xlsx', '.xls', '.csv'];
+    const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+    if (!validExtensions.includes(fileExtension)) {
+      toast.error('Please upload a valid Excel file (.xlsx, .xls) or CSV file');
+      return;
+    }
+
+    setImporting(true);
+    
+    // Helper function to handle file processing errors
+    const handleFileProcessingError = (error) => {
+      console.error('Error processing file:', error);
+      let errorMessage = 'Error processing file. Please check the file format.';
+      
+      // Provide more specific error messages
+      if (error.message) {
+        if (error.message.includes('Cannot read') || error.message.includes('Unexpected')) {
+          errorMessage = 'The file format is invalid or corrupted. Please ensure it is a valid Excel (.xlsx, .xls) or CSV file.';
+        } else if (error.message.includes('timeout')) {
+          errorMessage = 'File processing timed out. The file may be too large.';
+        } else {
+          errorMessage = `Error processing file: ${error.message}`;
+        }
+      }
+      
+      toast.error(errorMessage);
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+    
+    // Helper function to process import data
+    const processImportData = async (jsonData) => {
+      if (jsonData.length === 0) {
+        toast.error('The file is empty or has no data rows');
+        setImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+
+      // Validate that we have valid data structure
+      if (!Array.isArray(jsonData) || jsonData.length === 0) {
+        toast.error('The file does not contain valid data. Please check the file format.');
+        setImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+      
+      // Validate required columns - match server-side logic
+      const requiredColumns = [
+        { variants: ['Contributor Project Name', 'ContributorProjectName', 'Contributor Project'], label: 'Contributor Project Name' },
+        { variants: ['Client Tool Account Name', 'ClientToolAccountName', 'Account Name'], label: 'Client Tool Account Name' }
+      ];
+      const firstRow = jsonData[0];
+      
+      // Check if first row is valid
+      if (!firstRow || typeof firstRow !== 'object') {
+        toast.error('The file format is invalid. Please ensure the first row contains column headers.');
+        setImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+      
+      const fileKeys = Object.keys(firstRow);
+      
+      if (fileKeys.length === 0) {
+        toast.error('The file does not contain any columns. Please check the file format.');
+        setImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+      
+      // Helper function to normalize column names (same as server-side)
+      const normalizeColumnName = (name) => {
+        if (typeof name !== 'string') return '';
+        return name.toLowerCase().replace(/\s+/g, '').trim();
+      };
+      
+      // Check which columns are missing
+      const missingColumns = [];
+      requiredColumns.forEach(column => {
+        const found = fileKeys.some(fileKey => {
+          const normalizedFileKey = normalizeColumnName(fileKey);
+          return column.variants.some(variant => 
+            normalizedFileKey === normalizeColumnName(variant)
+          );
+        });
+        if (!found) {
+          missingColumns.push(column.label);
+        }
+      });
+
+      if (missingColumns.length > 0) {
+        toast.error(`File must contain "${missingColumns.join('" and "')}" columns. Found columns: ${fileKeys.join(', ')}`);
+        setImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+
+      // Process import - REWRITTEN FOR PERFORMANCE
+      try {
+        console.log(`[Import] Starting import of ${jsonData.length} records`);
+        
+        // Create axios instance with extended timeout
+        const bulkImportClient = axios.create({
+          baseURL: apiClient.defaults.baseURL,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(localStorage.getItem('token') ? { Authorization: `Bearer ${localStorage.getItem('token')}` } : {})
+          },
+          timeout: 600000, // 10 minutes
+        });
+        
+        // Send all records at once - server will process in batches
+        const response = await bulkImportClient.post('/client-tool-account/bulk-import', {
+          records: jsonData,
+          batchSize: 50 // Process 50 records per batch on server
+        });
+
+        if (response.data && response.data.success) {
+          const importedCount = response.data.importedCount || 0;
+          const errorCount = response.data.errorCount || 0;
+          
+          if (importedCount > 0) {
+            toast.success(`Successfully imported ${importedCount} record(s)`);
+          }
+          
+          if (errorCount > 0) {
+            toast.error(`${errorCount} record(s) failed to import`);
+            if (response.data.errors && response.data.errors.length > 0) {
+              console.error('Import errors:', response.data.errors);
+            }
+          }
+          
+          // Refresh the table
+          fetchContributorProjects();
+        } else {
+          toast.error(response.data?.error || 'Failed to import records');
+        }
+      } catch (apiError) {
+        console.error('Error calling bulk-import API:', apiError);
+        
+        let errorMessage = 'Failed to import records. Please try again.';
+        if (apiError.response) {
+          errorMessage = apiError.response.data?.error || apiError.response.data?.message || errorMessage;
+        } else if (apiError.message) {
+          if (apiError.message.includes('timeout') || apiError.message.includes('504')) {
+            errorMessage = 'Import timed out. The file may be too large. Please try with fewer records or contact support.';
+          } else {
+            errorMessage = apiError.message;
+          }
+        }
+        
+        toast.error(errorMessage);
+      } finally {
+        setImporting(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    
+    try {
+      const reader = new FileReader();
+      
+      // Use appropriate read method based on file type
+      if (fileExtension === '.csv') {
+        // For CSV files, read as text
+        reader.onload = async (e) => {
+          try {
+            const text = e.target.result;
+            if (!text || text.trim().length === 0) {
+              toast.error('The CSV file is empty');
+              setImporting(false);
+              if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+              }
+              return;
+            }
+            
+            // Use XLSX to parse CSV
+            const workbook = XLSX.read(text, { type: 'string', sheetStubs: true });
+            if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+              toast.error('The CSV file appears to be empty or invalid');
+              setImporting(false);
+              if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+              }
+              return;
+            }
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            if (!worksheet) {
+              toast.error('The CSV file does not contain valid data');
+              setImporting(false);
+              if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+              }
+              return;
+            }
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+            await processImportData(jsonData);
+          } catch (error) {
+            handleFileProcessingError(error);
+          }
+        };
+        reader.readAsText(file);
+      } else {
+        // For Excel files, read as array buffer
+        reader.onload = async (e) => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array', sheetStubs: true });
+            if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
+              toast.error('The Excel file appears to be empty or invalid');
+              setImporting(false);
+              if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+              }
+              return;
+            }
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            if (!worksheet) {
+              toast.error('The Excel file does not contain valid data');
+              setImporting(false);
+              if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+              }
+              return;
+            }
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+            await processImportData(jsonData);
+          } catch (error) {
+            handleFileProcessingError(error);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    } catch (error) {
+      console.error('Error reading file:', error);
+      toast.error('Failed to read file');
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handlePublishSelected = async () => {
+    if (bulkSelectedProjects.length === 0) {
+      toast.error('Please select at least one project');
+      return;
+    }
+
+    // Check if all selected projects have a CTA selected in their Actions column
+    const projectsWithoutCTA = bulkSelectedProjects.filter(projectId => !selectedAccounts[projectId]);
+    if (projectsWithoutCTA.length > 0) {
+      toast.error(`Please select a Client Tool Account for all selected projects`);
+      return;
+    }
+    
+    // Validate bulk assignment
+    const assignments = bulkSelectedProjects.map(projectId => ({
+      projectId,
+      accountId: selectedAccounts[projectId]
+    }));
+    const validation = validateBulkAssignment(assignments);
+    if (!validation.isValid) {
+      toast.error(`Validation failed: ${validation.errors.join(', ')}`);
+      return;
+    }
+    
+    // Check for conflicts
+    const conflicts = getAllConflicts(contributorProjects, selectedAccounts);
+    const relevantConflicts = conflicts.filter(c => 
+      bulkSelectedProjects.some(pid => 
+        c.projectIds?.includes(pid) || c.currentProjectId === pid
+      )
+    );
+    
+    if (relevantConflicts.length > 0) {
+      const conflictMessages = relevantConflicts.map(c => c.message).join('; ');
+      const proceed = window.confirm(
+        `Warning: Conflicts detected:\n\n${conflictMessages}\n\nDo you want to proceed anyway?`
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+    
+    // Check for inactive/deactivated accounts
+    const inactiveAccounts = [];
+    bulkSelectedProjects.forEach(projectId => {
+      const accountId = selectedAccounts[projectId];
+      const status = accountStatusChecks[accountId];
+      if (status && !status.isActive) {
+        const project = contributorProjects.find(p => p.id === projectId);
+        inactiveAccounts.push({
+          projectName: project?.name || projectId,
+          status: status.status,
+          warnings: status.warnings
+        });
+      }
+    });
+    
+    if (inactiveAccounts.length > 0) {
+      const inactiveMessage = inactiveAccounts
+        .map(ia => `${ia.projectName}: ${ia.status} (${ia.warnings.join(', ')})`)
+        .join('\n');
+      const proceed = window.confirm(
+        `Warning: Some accounts are inactive or deactivated:\n\n${inactiveMessage}\n\nDo you want to proceed anyway?`
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+
+    setUpdating(true);
+    try {
+      // Update each selected project with its respective CTA from the Actions column
+      const updatePromises = bulkSelectedProjects.map(projectId => {
+        const accountId = selectedAccounts[projectId];
+        return apiClient.post('/client-tool-account/update-mapping', {
+          projectId,
+          accountId
+        });
+      });
+
+      const results = await Promise.all(updatePromises);
+      const successCount = results.filter(r => r.data.success).length;
+      
+      if (successCount === bulkSelectedProjects.length) {
+        toast.success(`Successfully published ${successCount} project(s) to Salesforce`);
+        setBulkSelectedProjects([]);
+        // Clear selected accounts for published projects
+        setSelectedAccounts(prev => {
+          const updated = { ...prev };
+          bulkSelectedProjects.forEach(projectId => {
+            delete updated[projectId];
+          });
+          return updated;
+        });
+        // Clear search terms and results for published projects
+        setSearchTermsPerProject(prev => {
+          const updated = { ...prev };
+          bulkSelectedProjects.forEach(projectId => {
+            delete updated[projectId];
+          });
+          return updated;
+        });
+        setSearchResultsPerProject(prev => {
+          const updated = { ...prev };
+          bulkSelectedProjects.forEach(projectId => {
+            delete updated[projectId];
+          });
+          return updated;
+        });
+        fetchContributorProjects();
+      } else {
+        toast.error(`Failed to publish some projects. ${successCount} of ${bulkSelectedProjects.length} succeeded.`);
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to publish projects';
+      toast.error(errorMessage);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  const resetForm = () => {
+    setFormData({
+      clientToolAccountName: '',
+      contributor: '',
+      contributorId: '',
+      contributorName: '',
+      clientToolUserId: '',
+      account: '',
+      accountId: '',
+      accountName: '',
+      otpLimitExceeded: false,
+      deactivated: false,
+      lastChangedDate: '',
+      lastChangedTime: '',
+      clientToolName: '',
+      clientToolEmail: '',
+      verified: false
+    });
+    setContributorSearchTerm('');
+    setContributorSearchResults([]);
+    setAccountSearchTerm('');
+    setAccountSearchResults([]);
+  };
+  
+  // Search Contributors
+  const searchContributors = async (searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setContributorSearchResults([]);
+      return;
+    }
+    setContributorSearching(true);
+    try {
+      const response = await apiClient.get(`/salesforce/search-people?search=${encodeURIComponent(searchTerm)}&recordType=`);
+      if (response.data.success) {
+        // Filter to only return Contacts (Contributor__c typically expects Contact IDs, not User IDs)
+        // Contact IDs start with '003', User IDs start with '005'
+        const contactsOnly = (response.data.people || []).filter(person => 
+          person.id && person.id.startsWith('003')
+        );
+        setContributorSearchResults(contactsOnly);
+      }
+    } catch (error) {
+      setContributorSearchResults([]);
+    } finally {
+      setContributorSearching(false);
+    }
+  };
+  
+  // Search Accounts
+  const searchAccounts = async (searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setAccountSearchResults([]);
+      return;
+    }
+    setAccountSearching(true);
+    try {
+      const response = await apiClient.get(`/salesforce/accounts`);
+      if (response.data.success) {
+        const accounts = response.data.accounts || [];
+        const filtered = accounts.filter(acc => 
+          acc.name.toLowerCase().includes(searchTerm.toLowerCase())
+        );
+        setAccountSearchResults(filtered);
+      }
+    } catch (error) {
+      setAccountSearchResults([]);
+    } finally {
+      setAccountSearching(false);
+    }
+  };
+  
+  // Debounced search handlers
+  const contributorSearchDebounceRef = useRef(null);
+  const accountSearchDebounceRef = useRef(null);
+  const updateAccountSearchDebounceRef = useRef(null);
+  
+  const handleContributorSearchChange = (value) => {
+    setContributorSearchTerm(value);
+    if (contributorSearchDebounceRef.current) {
+      clearTimeout(contributorSearchDebounceRef.current);
+    }
+    if (value.trim().length >= 2) {
+      contributorSearchDebounceRef.current = setTimeout(() => {
+        searchContributors(value);
+      }, 500);
+    } else {
+      setContributorSearchResults([]);
+    }
+  };
+  
+  const handleAccountSearchChange = (value) => {
+    setAccountSearchTerm(value);
+    if (accountSearchDebounceRef.current) {
+      clearTimeout(accountSearchDebounceRef.current);
+    }
+    if (value.trim().length >= 2) {
+      accountSearchDebounceRef.current = setTimeout(() => {
+        searchAccounts(value);
+      }, 500);
+    } else {
+      setAccountSearchResults([]);
+    }
+  };
+
+  const toggleBulkSelection = (projectId) => {
+    setBulkSelectedProjects(prev => {
+      if (prev.includes(projectId)) {
+        return prev.filter(id => id !== projectId);
+      } else {
+        return [...prev, projectId];
+      }
+    });
+  };
+
+  const selectAccountForProject = (projectId, accountId, accountName) => {
+    // Find the account object from search results
+    const account = searchResultsPerProject[projectId]?.find(acc => acc.id === accountId);
+    
+    // Validate account availability
+    const availability = checkAccountAvailability(account, projectId, contributorProjects);
+    if (!availability.isAvailable) {
+      toast.error(availability.reason || 'Account is not available for assignment');
+      return;
+    }
+    
+    // Check account status
+    const status = checkAccountStatus(account);
+    const warnings = [];
+    const conflicts = [];
+    
+    if (!status.isActive) {
+      warnings.push(`Account is ${status.status}. ${status.warnings.join(', ')}`);
+    } else if (status.warnings.length > 0) {
+      warnings.push(...status.warnings);
+    }
+    
+    // Check for existing mapping
+    const existingMapping = detectExistingMapping(accountId, projectId, contributorProjects);
+    if (existingMapping) {
+      conflicts.push(existingMapping.message);
+    }
+    
+    // Check for duplicate mappings in current selection
+    const updatedSelectedAccounts = {
+      ...selectedAccounts,
+      [projectId]: accountId
+    };
+    const duplicateConflicts = detectDuplicateMappings(contributorProjects, updatedSelectedAccounts);
+    duplicateConflicts.forEach(conflict => {
+      if (conflict.accountId === accountId && conflict.projectIds.includes(projectId)) {
+        conflicts.push(conflict.message);
+      }
+    });
+    
+    // Set validation warnings and conflicts
+    setValidationWarnings(prev => ({
+      ...prev,
+      [projectId]: warnings
+    }));
+    setValidationConflicts(prev => ({
+      ...prev,
+      [projectId]: conflicts
+    }));
+    setAccountStatusChecks(prev => ({
+      ...prev,
+      [accountId]: status
+    }));
+    
+    // Show warning toast if there are warnings but allow selection
+    if (warnings.length > 0) {
+      toast.warning(`Warning: ${warnings.join(', ')}`, { duration: 5000 });
+    }
+    
+    // Show conflict warning but allow selection
+    if (conflicts.length > 0) {
+      toast.warning(`Conflict detected: ${conflicts.join(', ')}`, { duration: 6000 });
+    }
+    
+    // Set the selected account
+    setSelectedAccounts(updatedSelectedAccounts);
+    
+    // Update the search input field with the selected account name
+    setSearchTermsPerProject(prev => ({
+      ...prev,
+      [projectId]: accountName || ''
+    }));
+    
+    // Clear the search results for this project to close the dropdown
+    setSearchResultsPerProject(prev => ({
+      ...prev,
+      [projectId]: []
+    }));
+    
+    // Clear the searching state for this project
+    setSearchingPerProject(prev => {
+      const updated = { ...prev };
+      delete updated[projectId];
+      return updated;
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="dashboard-layout">
+        <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <div className="client-tool-account" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="loading-container">
+            <Loader className="spinning" size={24} />
+            <p>Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      
+      <div className="client-tool-account" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease' }} onClick={(e) => {
+        // Only close form if clicking outside the form itself
+        if (e.target === e.currentTarget && showCreateForm) {
+          // Don't close on outside click - let user explicitly close it
+        }
+      }}>
+        <div className="client-tool-account-container">
+          <div className="client-tool-account-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button 
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">Client Tool Account</h1>
+                  <p className="page-subtitle">Manage Client Tool Account mappings for Contributor Projects</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <BookmarkButton pageName="Client Tool Account" pageType="page" />
+                <div className="user-profile">
+                  <div className="user-avatar">
+                    {(user?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="user-name">{user?.email || 'User'}</span>
+                  <button className="logout-btn" onClick={logout} title="Logout">
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '2px solid var(--border-color)' }}>
+            <button
+              onClick={() => setActiveTab('management')}
+              style={{
+                padding: '12px 20px',
+                background: 'none',
+                border: 'none',
+                borderBottom: activeTab === 'management' ? '2px solid #0176d3' : '2px solid transparent',
+                color: activeTab === 'management' ? '#0176d3' : '#666',
+                fontWeight: activeTab === 'management' ? '600' : '400',
+                cursor: 'pointer',
+                fontSize: '14px',
+                marginBottom: '-2px'
+              }}
+            >
+              Management
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              style={{
+                padding: '12px 20px',
+                background: 'none',
+                border: 'none',
+                borderBottom: activeTab === 'analytics' ? '2px solid #0176d3' : '2px solid transparent',
+                color: activeTab === 'analytics' ? '#0176d3' : '#666',
+                fontWeight: activeTab === 'analytics' ? '600' : '400',
+                cursor: 'pointer',
+                fontSize: '14px',
+                marginBottom: '-2px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <BarChart3 size={16} />
+              Analytics
+            </button>
+          </div>
+
+          {/* Analytics Tab */}
+          {activeTab === 'analytics' && (
+            <ClientToolAccountAnalytics />
+          )}
+
+          {/* Management Tab */}
+          {activeTab === 'management' && (
+          <div>
+          <div className="client-tool-account-actions" style={{ display: 'flex', gap: '12px', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="btn-primary create-client-tool-account-btn"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsUpdateMode(false);
+                  setSelectedAccountId(null);
+                  setShowCreateForm(prev => !prev);
+                  resetForm();
+                  setAccountSearchResultsForUpdate([]);
+                }}
+                type="button"
+              >
+                <Plus size={18} />
+                <span>Create Client Tool Account</span>
+              </button>
+              <button
+                className="btn-primary"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsUpdateMode(true);
+                  setSelectedAccountId(null);
+                  setShowCreateForm(true);
+                  resetForm();
+                  setAccountSearchResultsForUpdate([]);
+                }}
+                type="button"
+              >
+                <Edit size={18} />
+                <span>Update Client Tool Account</span>
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                className="btn-secondary"
+                onClick={handleDownloadTemplate}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+                title="Download import template"
+              >
+                <FileText size={16} />
+                Download Template
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={importing}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+                title="Import from Excel file"
+              >
+                {importing ? <Loader size={16} className="spinning" /> : <Upload size={16} />}
+                {importing ? 'Importing...' : 'Import'}
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                onChange={handleImportFile}
+                style={{ display: 'none' }}
+              />
+            </div>
+          </div>
+
+          {showCreateForm && (
+            <div 
+              className="create-form-card neumorphic fade-in" 
+              onClick={(e) => {
+                // Close search results when clicking outside
+                setContributorSearchResults([]);
+                setAccountSearchResults([]);
+                if (isUpdateMode && !selectedAccountId) {
+                  setAccountSearchResultsForUpdate([]);
+                }
+                e.stopPropagation();
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              style={{ position: 'relative', zIndex: 100 }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h2 style={{ fontSize: '16px', fontWeight: '600', margin: 0 }}>
+                  {isUpdateMode ? 'Update Client Tool Account' : 'New Client Tool Account'}
+                </h2>
+                <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  <span style={{ color: 'red' }}>*</span> Required Information
+                </div>
+              </div>
+              {isUpdateMode && !selectedAccountId && (
+                <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: '6px', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  Type in the "Client Tool Account Name" field to search for existing Client Tool Accounts. Select an account to load its data.
+                </div>
+              )}
+              {isUpdateMode && selectedAccountId && (
+                <div style={{ marginBottom: '12px', padding: '8px 12px', background: 'var(--success)', borderRadius: '6px', fontSize: '12px', color: '#fff' }}>
+                  Account selected. Edit the fields below and click Update to save changes.
+                </div>
+              )}
+              {isUpdateMode && accountSearchResultsForUpdate.length > 0 && !selectedAccountId && (
+                <div style={{ marginBottom: '12px', position: 'relative', zIndex: 1001 }}>
+                  <div className="search-results-dropdown" style={{ maxHeight: '200px', overflowY: 'auto', fontSize: '12px', position: 'absolute', width: '100%', background: '#fff', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                    {accountSearchResultsForUpdate.map((account) => (
+                      <div
+                        key={account.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedAccountId(account.id);
+                          setAccountSearchResultsForUpdate([]);
+                          fetchAccountDetails(account.id);
+                        }}
+                        style={{ padding: '10px 12px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                      >
+                        <div style={{ fontWeight: '500', fontSize: '13px' }}>{account.name || account.accountName}</div>
+                        {account.contributorName && (
+                          <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>Contributor: {account.contributorName}</div>
+                        )}
+                        {account.clientToolName && (
+                          <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>Tool: {account.clientToolName}</div>
+                        )}
+                        {account.clientToolEmail && (
+                          <div style={{ fontSize: '11px', color: '#666' }}>Email: {account.clientToolEmail}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {isUpdateMode && searchingAccountForUpdate && (
+                <div style={{ marginBottom: '12px', padding: '8px 12px', textAlign: 'center', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  <RefreshCw size={14} className="spinning" style={{ display: 'inline-block', marginRight: '6px' }} />
+                  Searching...
+                </div>
+              )}
+              <form 
+                onSubmit={handleCreateClientToolAccount} 
+                onClick={(e) => {
+                  // Close search results when clicking on form
+                  setContributorSearchResults([]);
+                  setAccountSearchResults([]);
+                  if (isUpdateMode && !selectedAccountId) {
+                    setAccountSearchResultsForUpdate([]);
+                  }
+                  e.stopPropagation();
+                }}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <div style={{ marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '13px', fontWeight: '600', marginBottom: '10px', paddingBottom: '6px', borderBottom: '1px solid var(--border-color)' }}>Information</h3>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Tool Name <span style={{ color: 'red' }}>*</span></label>
+                      <select
+                        value={formData.clientToolName}
+                        onChange={(e) => setFormData({ ...formData, clientToolName: e.target.value })}
+                        required
+                        style={{ fontSize: '12px', padding: '6px 8px' }}
+                      >
+                        <option value="">--None--</option>
+                        {clientToolNamePicklist.map((value, index) => (
+                          <option key={index} value={value}>{value}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ position: 'relative', marginBottom: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Contributor <span style={{ color: 'red' }}>*</span></label>
+                      <input
+                        type="text"
+                        value={contributorSearchTerm || formData.contributorName || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setContributorSearchTerm(value);
+                          handleContributorSearchChange(value);
+                          if (!value) {
+                            setFormData({ ...formData, contributor: '', contributorId: '', contributorName: '' });
+                            setContributorSearchResults([]);
+                          }
+                        }}
+                        required
+                        placeholder="Search Contributors..."
+                        style={{ fontSize: '12px', padding: '6px 8px', width: '100%' }}
+                      />
+                      {contributorSearching && (
+                        <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '4px', color: '#666', fontSize: '10px', marginTop: '12px' }}>
+                          <RefreshCw size={12} className="spinning" />
+                          <span>Searching...</span>
+                        </div>
+                      )}
+                      {contributorSearchResults.length > 0 && (
+                        <div className="search-results-dropdown" style={{ marginTop: '4px', maxHeight: '150px', overflowY: 'auto', fontSize: '12px', position: 'absolute', zIndex: 1000, width: '100%', background: '#fff', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                          {contributorSearchResults.map((person) => (
+                            <div
+                              key={person.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFormData({ ...formData, contributor: person.id, contributorId: person.id, contributorName: person.name });
+                                setContributorSearchTerm(person.name);
+                                setContributorSearchResults([]);
+                              }}
+                              style={{ padding: '8px 10px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                            >
+                              <div style={{ fontWeight: '500', fontSize: '12px' }}>{person.name}</div>
+                              {person.email && <div style={{ fontSize: '11px', color: '#666' }}>{person.email}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {!formData.contributor && contributorSearchTerm && contributorSearchResults.length === 0 && !contributorSearching && (
+                        <div style={{ color: 'red', fontSize: '11px', marginTop: '2px' }}>Complete this field.</div>
+                      )}
+                    </div>
+
+                    <div className="form-group" style={{ position: 'relative', marginBottom: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Account <span style={{ color: 'red' }}>*</span></label>
+                      <input
+                        type="text"
+                        value={accountSearchTerm || formData.accountName || ''}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setAccountSearchTerm(value);
+                          handleAccountSearchChange(value);
+                          if (!value) {
+                            setFormData({ ...formData, account: '', accountId: '', accountName: '' });
+                            setAccountSearchResults([]);
+                          }
+                        }}
+                        required
+                        placeholder="Search Accounts..."
+                        style={{ fontSize: '12px', padding: '6px 8px', width: '100%' }}
+                      />
+                      {accountSearching && (
+                        <div style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '4px', color: '#666', fontSize: '10px', marginTop: '12px' }}>
+                          <RefreshCw size={12} className="spinning" />
+                          <span>Searching...</span>
+                        </div>
+                      )}
+                      {accountSearchResults.length > 0 && (
+                        <div className="search-results-dropdown" style={{ marginTop: '4px', maxHeight: '150px', overflowY: 'auto', fontSize: '12px', position: 'absolute', zIndex: 1000, width: '100%', background: '#fff', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
+                          {accountSearchResults.map((account) => (
+                            <div
+                              key={account.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFormData({ ...formData, account: account.id, accountId: account.id, accountName: account.name });
+                                setAccountSearchTerm(account.name);
+                                setAccountSearchResults([]);
+                              }}
+                              style={{ padding: '8px 10px', cursor: 'pointer', borderBottom: '1px solid var(--border-color)' }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-secondary)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                            >
+                              <div style={{ fontWeight: '500', fontSize: '12px' }}>{account.name}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {!formData.account && accountSearchTerm && accountSearchResults.length === 0 && !accountSearching && (
+                        <div style={{ color: 'red', fontSize: '11px', marginTop: '2px' }}>Complete this field.</div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Tool Account Name</label>
+                      <input
+                        type="text"
+                        value={formData.clientToolAccountName}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (isUpdateMode && !selectedAccountId) {
+                            handleClientToolAccountNameChangeInUpdateMode(value);
+                          } else {
+                            setFormData({ ...formData, clientToolAccountName: value });
+                          }
+                        }}
+                        placeholder={isUpdateMode && !selectedAccountId ? "Search by Client Tool Account Name..." : "Enter client tool account name"}
+                        style={{ fontSize: '12px', padding: '6px 8px' }}
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Tool User ID</label>
+                      <input
+                        type="text"
+                        value={formData.clientToolUserId}
+                        onChange={(e) => setFormData({ ...formData, clientToolUserId: e.target.value })}
+                        placeholder="Enter client tool user ID"
+                        style={{ fontSize: '12px', padding: '6px 8px' }}
+                      />
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Client Tool Email <span style={{ color: 'red' }}>*</span></label>
+                      <input
+                        type="email"
+                        value={formData.clientToolEmail}
+                        onChange={(e) => setFormData({ ...formData, clientToolEmail: e.target.value })}
+                        required
+                        placeholder="Enter client tool email"
+                        style={{ fontSize: '12px', padding: '6px 8px' }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '10px', marginBottom: '10px' }}>
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.otpLimitExceeded}
+                          onChange={(e) => setFormData({ ...formData, otpLimitExceeded: e.target.checked })}
+                          style={{ width: '14px', height: '14px' }}
+                        />
+                        <span>OTP Limit Exceeded</span>
+                      </label>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.deactivated}
+                          onChange={(e) => setFormData({ ...formData, deactivated: e.target.checked })}
+                          style={{ width: '14px', height: '14px' }}
+                        />
+                        <span>Deactivated</span>
+                      </label>
+                    </div>
+
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '12px' }}>
+                        <input
+                          type="checkbox"
+                          checked={formData.verified}
+                          onChange={(e) => setFormData({ ...formData, verified: e.target.checked })}
+                          style={{ width: '14px', height: '14px' }}
+                        />
+                        <span>Verified</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: '10px' }}>
+                    <label style={{ fontSize: '12px', marginBottom: '4px' }}>Last Changed At</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="date"
+                          value={formData.lastChangedDate}
+                          onChange={(e) => setFormData({ ...formData, lastChangedDate: e.target.value })}
+                          style={{ fontSize: '12px', padding: '6px 30px 6px 8px' }}
+                        />
+                        <span style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: '#666', fontSize: '12px' }}>📅</span>
+                      </div>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="time"
+                          value={formData.lastChangedTime}
+                          onChange={(e) => setFormData({ ...formData, lastChangedTime: e.target.value })}
+                          style={{ fontSize: '12px', padding: '6px 30px 6px 8px' }}
+                        />
+                        <span style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: '#666', fontSize: '12px' }}>🕐</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: '16px', paddingTop: '12px', borderTop: '1px solid var(--border-color)' }}>
+                  <h3 style={{ fontSize: '13px', fontWeight: '600', marginBottom: '10px' }}>System Information</h3>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Created By</label>
+                      <input type="text" value="" disabled style={{ fontSize: '12px', padding: '6px 8px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }} />
+                    </div>
+                    <div className="form-group" style={{ marginBottom: '10px' }}>
+                      <label style={{ fontSize: '12px', marginBottom: '4px' }}>Last Modified By</label>
+                      <input type="text" value="" disabled style={{ fontSize: '12px', padding: '6px 8px', background: 'var(--bg-secondary)', color: 'var(--text-secondary)' }} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-actions" style={{ paddingTop: '12px', borderTop: '1px solid var(--border-color)', marginTop: '12px' }}>
+                  <button type="button" className="btn-primary" onClick={() => { 
+                    setShowCreateForm(false); 
+                    setIsUpdateMode(false);
+                    setSelectedAccountId(null);
+                    resetForm(); 
+                    setAccountSearchResultsForUpdate([]);
+                  }} style={{ fontSize: '12px', padding: '8px 16px' }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" disabled={creating || updating || (isUpdateMode && !selectedAccountId)}>
+                    {isUpdateMode ? (updating ? 'Updating...' : 'Update Account') : (creating ? 'Creating...' : 'Create Account')}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+
+
+          <div className="contributor-projects-list">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                Contributor Projects Requiring Client Tool Account ({filteredContributorProjects.length})
+              </h2>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', minWidth: '250px', maxWidth: '400px' }}>
+                  <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#666', zIndex: 1, pointerEvents: 'none' }} />
+                  <input
+                    type="text"
+                    placeholder="Search contributor projects..."
+                    value={contributorProjectsSearchTerm}
+                    onChange={(e) => setContributorProjectsSearchTerm(e.target.value)}
+                    style={{
+                      paddingLeft: '36px',
+                      fontSize: '14px',
+                      padding: '10px 16px 10px 36px',
+                      width: '100%',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-primary)',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <button
+                  className="btn-secondary"
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+                  title="Refresh table"
+                >
+                  <RefreshCw size={16} className={loading ? 'spinning' : ''} />
+                  Refresh
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={handleExportToExcel}
+                  disabled={filteredContributorProjects.length === 0}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+                  title="Export table data to Excel"
+                >
+                  <Download size={16} />
+                  Export to Excel
+                </button>
+                <button
+                  className="btn-primary"
+                  onClick={handlePublishSelected}
+                  disabled={bulkSelectedProjects.length === 0 || updating}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+                  title={bulkSelectedProjects.length === 0 ? 'Please select at least one project' : 'Publish selected projects to Salesforce'}
+                >
+                  <Send size={16} />
+                  {updating ? 'Publishing...' : bulkSelectedProjects.length > 0 ? `Publish ${bulkSelectedProjects.length} Selected` : 'Publish Selected'}
+                </button>
+              </div>
+            </div>
+            
+            {filteredContributorProjects.length === 0 ? (
+              <div className="no-projects">
+                <p>No contributor projects found that require client tool account mapping</p>
+              </div>
+            ) : (
+              <div className="projects-table" ref={tableContainerRef}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input
+                          type="checkbox"
+                          checked={bulkSelectedProjects.length === filteredContributorProjects.length && filteredContributorProjects.length > 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setBulkSelectedProjects(filteredContributorProjects.map(p => p.id));
+                            } else {
+                              setBulkSelectedProjects([]);
+                            }
+                          }}
+                        />
+                      </th>
+                      <th>Contributor Project Name</th>
+                      <th>Project</th>
+                      <th>Client Tool Account Used</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredContributorProjects.map((project) => (
+                      <tr key={project.id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={bulkSelectedProjects.includes(project.id)}
+                            onChange={() => toggleBulkSelection(project.id)}
+                          />
+                        </td>
+                        <td>{project.contributorProjectName || 'N/A'}</td>
+                        <td>{project.project || 'N/A'}</td>
+                        <td>
+                          {project.clientToolAccountUsed ? (
+                            <span style={{ color: 'var(--success)' }}>{project.clientToolAccountUsedName || project.clientToolAccountUsed}</span>
+                          ) : (
+                            <span style={{ color: 'var(--error)' }}>Not Set</span>
+                          )}
+                        </td>
+                        <td
+                          onClick={(e) => {
+                            // Close search results when clicking outside the search input
+                            if (!e.target.closest('.search-box') && !e.target.closest('.search-results-dropdown')) {
+                              setSearchResultsPerProject(prev => {
+                                const updated = { ...prev };
+                                delete updated[project.id];
+                                return updated;
+                              });
+                            }
+                          }}
+                        >
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', position: 'relative' }}>
+                            <div style={{ position: 'relative', minWidth: '250px', flex: 1 }} onClick={(e) => e.stopPropagation()}>
+                              <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#666', zIndex: 1, pointerEvents: 'none' }} />
+                              <input
+                                type="text"
+                                placeholder="Search Client Tool Account..."
+                                value={searchTermsPerProject[project.id] || ''}
+                                onChange={(e) => handleProjectSearchChange(project.id, e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                style={{ 
+                                  paddingLeft: '36px', 
+                                  fontSize: '13px', 
+                                  padding: '6px 10px 6px 36px', 
+                                  width: '100%', 
+                                  paddingRight: searchingPerProject[project.id] ? '90px' : '10px',
+                                  border: '1px solid var(--border-color)',
+                                  borderRadius: 'var(--radius-md)',
+                                  background: 'var(--surface)',
+                                  color: 'var(--text-primary)',
+                                  boxSizing: 'border-box'
+                                }}
+                              />
+                              {searchingPerProject[project.id] && (
+                                <div style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', gap: '6px', color: '#666', fontSize: '11px', zIndex: 1 }}>
+                                  <RefreshCw size={14} className="spinning" />
+                                  <span>Searching...</span>
+                                </div>
+                              )}
+                              {searchingPerProject[project.id] && (
+                                <div className="search-results-dropdown" style={{ padding: '12px', textAlign: 'center', color: '#666', fontSize: '12px' }} onClick={(e) => e.stopPropagation()}>
+                                  Searching...
+                                </div>
+                              )}
+                              {!searchingPerProject[project.id] && searchResultsPerProject[project.id] && searchResultsPerProject[project.id].length > 0 && (
+                                <div className="search-results-dropdown" onClick={(e) => e.stopPropagation()}>
+                                  {searchResultsPerProject[project.id].map((account) => {
+                                    const availability = checkAccountAvailability(account, project.id, contributorProjects);
+                                    const status = checkAccountStatus(account);
+                                    const isUnavailable = !availability.isAvailable;
+                                    const isInactive = !status.isActive;
+                                    const hasWarnings = status.warnings.length > 0;
+                                    
+                                    return (
+                                      <div
+                                        key={account.id}
+                                        onClick={(e) => {
+                                          if (!isUnavailable) {
+                                            e.stopPropagation();
+                                            selectAccountForProject(project.id, account.id, account.name || account.accountName);
+                                          }
+                                        }}
+                                        style={{
+                                          padding: '10px 12px',
+                                          cursor: isUnavailable ? 'not-allowed' : 'pointer',
+                                          borderBottom: '1px solid var(--border-color)',
+                                          background: selectedAccounts[project.id] === account.id ? 'var(--bg-secondary)' : 'transparent',
+                                          opacity: isUnavailable ? 0.5 : 1
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          if (!isUnavailable) {
+                                            e.currentTarget.style.background = 'var(--bg-secondary)';
+                                          }
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.background = selectedAccounts[project.id] === account.id ? 'var(--bg-secondary)' : 'transparent';
+                                        }}
+                                      >
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                          <div style={{ flex: 1 }}>
+                                            <div style={{ fontWeight: '500', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                              {account.name || account.accountName}
+                                              {isInactive && (
+                                                <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: '600' }}>(INACTIVE)</span>
+                                              )}
+                                              {hasWarnings && !isInactive && (
+                                                <AlertTriangle size={12} style={{ color: '#f59e0b' }} />
+                                              )}
+                                            </div>
+                                            {account.contributorName && (
+                                              <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>Contributor: {account.contributorName}</div>
+                                            )}
+                                            {account.clientToolName && (
+                                              <div style={{ fontSize: '11px', color: '#666', marginTop: '2px' }}>Tool: {account.clientToolName}</div>
+                                            )}
+                                            {account.clientToolEmail && (
+                                              <div style={{ fontSize: '11px', color: '#666' }}>Email: {account.clientToolEmail}</div>
+                                            )}
+                                            {account.clientToolUserId && (
+                                              <div style={{ fontSize: '11px', color: '#666' }}>User ID: {account.clientToolUserId}</div>
+                                            )}
+                                            {isUnavailable && (
+                                              <div style={{ fontSize: '11px', color: '#dc2626', marginTop: '4px', fontWeight: '500' }}>
+                                                {availability.reason}
+                                              </div>
+                                            )}
+                                            {hasWarnings && !isUnavailable && (
+                                              <div style={{ fontSize: '11px', color: '#f59e0b', marginTop: '4px' }}>
+                                                {status.warnings.join(', ')}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {/* Display validation warnings below search input */}
+                              {(validationWarnings[project.id]?.length > 0 || validationConflicts[project.id]?.length > 0) && (
+                                <div style={{ marginTop: '8px', position: 'relative', zIndex: 10 }}>
+                                  <ClientToolAccountValidationWarning
+                                    warnings={validationWarnings[project.id] || []}
+                                    conflicts={validationConflicts[project.id] || []}
+                                    onDismiss={() => {
+                                      setValidationWarnings(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[project.id];
+                                        return updated;
+                                      });
+                                      setValidationConflicts(prev => {
+                                        const updated = { ...prev };
+                                        delete updated[project.id];
+                                        return updated;
+                                      });
+                                    }}
+                                    type={validationConflicts[project.id]?.length > 0 ? 'error' : 'warning'}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {/* Infinite scroll trigger and loading indicator */}
+                {hasMoreProjects && (
+                  <>
+                    {!loadingMore && (
+                      <div
+                        ref={infiniteScrollRef}
+                        style={{ 
+                          height: '50px', 
+                          width: '100%', 
+                          marginTop: '20px',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <div style={{ 
+                          fontSize: '12px', 
+                          color: 'var(--text-secondary)',
+                          padding: '10px'
+                        }}>
+                          Scroll for more...
+                        </div>
+                      </div>
+                    )}
+                    {loadingMore && (
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'center', 
+                        alignItems: 'center', 
+                        padding: '20px',
+                        gap: '12px'
+                      }}>
+                        <Loader className="spinner" size={20} style={{ color: '#0176d3' }} />
+                        <span style={{ color: 'var(--text-primary)', fontSize: '14px' }}>Loading more contributor projects...</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ClientToolAccount;
+

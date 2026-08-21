@@ -1,0 +1,1658 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import { Menu, LogOut, Search, X, Info, Plus, ChevronDown, ChevronUp, Trash2, Loader, Save, Copy, FolderOpen, Download, Upload, FileText } from 'lucide-react';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
+import '../styles/CreateWorkStream.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+const CreateWorkStream = ({ hideHeader = false }) => {
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [submitting, setSubmitting] = useState(false);
+  const [showForm, setShowForm] = useState(false); // New state to control form visibility
+  
+  // Project Objectives without workstreams
+  const [projectObjectives, setProjectObjectives] = useState([]);
+  const [allProjectObjectives, setAllProjectObjectives] = useState([]); // Store all fetched data for filtering
+  const [loadingPOs, setLoadingPOs] = useState(true);
+  const [poOffset, setPoOffset] = useState(0);
+  const [poHasMore, setPoHasMore] = useState(true);
+  const [loadingMorePOs, setLoadingMorePOs] = useState(false);
+  const infiniteScrollRef = useRef(null);
+  const [statusFilter, setStatusFilter] = useState(''); // Filter by status
+  
+  // Workstreams array - each workstream has its own form data
+  const [workstreams, setWorkstreams] = useState([
+    {
+      id: Date.now(),
+      projectWorkstreamName: '',
+      projectObjective: '',
+      projectObjectiveId: '',
+      refresh: false,
+      deliveryToolName: '',
+      clientWorkstreamIdentifier: '',
+      functionality: ''
+    }
+  ]);
+  
+  // Track expanded/collapsed state for each workstream
+  const [expandedWorkstreams, setExpandedWorkstreams] = useState({ [Date.now()]: true });
+  
+  // Templates state
+  const [savedTemplates, setSavedTemplates] = useState([]);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [showLoadTemplateModal, setShowLoadTemplateModal] = useState(false);
+  const [showImportPreview, setShowImportPreview] = useState(false);
+  const [importedWorkstreams, setImportedWorkstreams] = useState([]);
+  const [importing, setImporting] = useState(false);
+  const [resolvingObjectives, setResolvingObjectives] = useState(false);
+
+  // Project Objective search - per workstream
+  const [projectObjectiveSearchTerms, setProjectObjectiveSearchTerms] = useState({});
+  const [projectObjectiveSearchResults, setProjectObjectiveSearchResults] = useState({});
+  const [loadingProjectObjectiveSearch, setLoadingProjectObjectiveSearch] = useState({});
+  const [showProjectObjectiveDropdowns, setShowProjectObjectiveDropdowns] = useState({});
+  const projectObjectiveSearchTimeoutRefs = useRef({});
+  const recentSelectionsRef = useRef({}); // Track recent selections to prevent search loop
+
+  // Fetch project objectives without workstreams
+  const fetchProjectObjectives = useCallback(async (offset = 0, append = false) => {
+    try {
+      if (offset === 0) {
+        setLoadingPOs(true);
+      } else {
+        setLoadingMorePOs(true);
+      }
+      
+      const response = await apiClient.get('/workstream/project-objectives-without-workstreams', {
+        params: { limit: 1000, offset },
+        timeout: 120000 // 2 minutes to match backend timeout
+      });
+      
+      if (response.data.success) {
+        const newPOs = response.data.projectObjectives;
+        if (append) {
+          setAllProjectObjectives(prev => [...prev, ...newPOs]);
+        } else {
+          setAllProjectObjectives(newPOs);
+          setPoOffset(0); // Reset offset when starting fresh
+        }
+        
+        // Update offset and hasMore
+        const newOffset = append ? poOffset + newPOs.length : newPOs.length;
+        setPoOffset(newOffset);
+        
+        // If we got exactly 1000 records, assume there might be more
+        // Also check the hasMore flag from backend
+        const hasMoreRecords = response.data.hasMore || newPOs.length === 1000;
+        setPoHasMore(hasMoreRecords);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to fetch project objectives');
+    } finally {
+      setLoadingPOs(false);
+      setLoadingMorePOs(false);
+    }
+  }, []);
+
+  // Load saved templates from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('workstreamTemplates');
+      if (saved) {
+        setSavedTemplates(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Error loading templates:', error);
+    }
+  }, []);
+
+  // Initial load
+  useEffect(() => {
+    if (!showForm) {
+      fetchProjectObjectives(0, false);
+    }
+  }, [showForm, fetchProjectObjectives]);
+
+  // Infinite scroll for project objectives
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && poHasMore && !loadingMorePOs && !showForm) {
+          fetchProjectObjectives(poOffset, true);
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (infiniteScrollRef.current) {
+      observer.observe(infiniteScrollRef.current);
+    }
+
+    return () => {
+      if (infiniteScrollRef.current) {
+        observer.unobserve(infiniteScrollRef.current);
+      }
+    };
+  }, [poHasMore, loadingMorePOs, poOffset, showForm, fetchProjectObjectives]);
+
+  // Filter project objectives by status
+  useEffect(() => {
+    if (statusFilter === '') {
+      setProjectObjectives(allProjectObjectives);
+    } else {
+      setProjectObjectives(allProjectObjectives.filter(po => po.status === statusFilter));
+    }
+  }, [statusFilter, allProjectObjectives]);
+
+  // Get unique status values for filter dropdown (exclude '--' and empty values)
+  const uniqueStatuses = Array.from(new Set(allProjectObjectives.map(po => po.status).filter(s => s && s !== '--'))).sort();
+
+  // Delivery Tool Name picklist (excluding QF as per original requirement)
+  const deliveryToolNameOptions = [
+    '--None--',
+    'A9',
+    'ADAP',
+    'Ampersand',
+    'Appen Collect',
+    'AppenLex',
+    'Baseline',
+    'EWOQ',
+    'Exotel',
+    'Other',
+    'Polyglot',
+    'SRT',
+    'TryRating',
+    'UHRS',
+    'Test',
+    'Test Tool'
+  ];
+
+  // Functionality picklist values
+  const functionalityOptions = [
+    '--None--',
+    'System Access',
+    'System Access & Productivity',
+    'Productivity'
+  ];
+
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      Object.keys(showProjectObjectiveDropdowns).forEach(workstreamId => {
+        if (showProjectObjectiveDropdowns[workstreamId] && !event.target.closest(`.project-objective-search-container-${workstreamId}`)) {
+          setShowProjectObjectiveDropdowns(prev => ({
+            ...prev,
+            [workstreamId]: false
+          }));
+        }
+      });
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showProjectObjectiveDropdowns]);
+
+  // Search Project Objectives when search term changes (per workstream)
+  useEffect(() => {
+    Object.keys(projectObjectiveSearchTerms).forEach(workstreamId => {
+      const searchTerm = projectObjectiveSearchTerms[workstreamId];
+      const workstream = workstreams.find(w => w.id === workstreamId);
+      
+      // Clear any existing timeout
+      if (projectObjectiveSearchTimeoutRefs.current[workstreamId]) {
+        clearTimeout(projectObjectiveSearchTimeoutRefs.current[workstreamId]);
+        delete projectObjectiveSearchTimeoutRefs.current[workstreamId];
+      }
+
+      // IMPORTANT: Don't search if an objective is already selected
+      // This prevents the search loop when user selects an objective
+      if (workstream && workstream.projectObjectiveId) {
+        setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+        setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+        setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+        return;
+      }
+
+      // Don't search if search term is empty
+      if (!searchTerm || searchTerm.trim() === '') {
+        setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+        setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+        setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+        return;
+      }
+
+      // Check if this is a recent selection (within last 2 seconds)
+      const recentSelection = recentSelectionsRef.current[workstreamId];
+      if (recentSelection) {
+        const timeSinceSelection = Date.now() - recentSelection.timestamp;
+        if (timeSinceSelection < 2000) {
+          // This is a recent selection, don't search
+          setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+          setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+          setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+          return;
+        }
+      }
+
+      // Only search if user is actively typing (not just matching selected value)
+      projectObjectiveSearchTimeoutRefs.current[workstreamId] = setTimeout(async () => {
+        // Get fresh search term and workstream
+        const currentSearchTerm = projectObjectiveSearchTerms[workstreamId];
+        if (!currentSearchTerm || currentSearchTerm.trim() === '') {
+          return;
+        }
+        
+        // CRITICAL: Re-check if objective was selected during timeout - if so, abort search
+        const currentWorkstream = workstreams.find(w => w.id === workstreamId);
+        if (currentWorkstream && currentWorkstream.projectObjectiveId) {
+          // An objective was selected, don't search
+          setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+          setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+          setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+          return;
+        }
+        
+        // Check again if this is a recent selection
+        const currentRecentSelection = recentSelectionsRef.current[workstreamId];
+        if (currentRecentSelection) {
+          const timeSinceSelection = Date.now() - currentRecentSelection.timestamp;
+          if (timeSinceSelection < 2000) {
+            // This is a recent selection, don't search
+            setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+            setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+            setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+            return;
+          }
+        }
+        
+        setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: true }));
+        try {
+          const response = await apiClient.get(`/workstream/search-project-objectives?search=${encodeURIComponent(currentSearchTerm)}`);
+          if (response.data.success) {
+            // CRITICAL: Final check before showing results - make sure objective wasn't selected during API call
+            const finalWorkstream = workstreams.find(w => w.id === workstreamId);
+            if (finalWorkstream && finalWorkstream.projectObjectiveId) {
+              // An objective was selected during the API call, don't show results
+              setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+              setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+              setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+              return;
+            }
+            
+            // Check for recent selection
+            const finalRecentSelection = recentSelectionsRef.current[workstreamId];
+            if (finalRecentSelection) {
+              const timeSinceSelection = Date.now() - finalRecentSelection.timestamp;
+              if (timeSinceSelection < 2000) {
+                // Objective was just selected, don't show results
+                setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+                setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+                setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+                return;
+              }
+            }
+            
+            // All checks passed, show results
+            setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: response.data.projectObjectives || [] }));
+            setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: true }));
+          }
+        } catch (error) {
+          setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+        } finally {
+          setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+        }
+      }, 300);
+    });
+
+    return () => {
+      Object.keys(projectObjectiveSearchTimeoutRefs.current).forEach(workstreamId => {
+        if (projectObjectiveSearchTimeoutRefs.current[workstreamId]) {
+          clearTimeout(projectObjectiveSearchTimeoutRefs.current[workstreamId]);
+          delete projectObjectiveSearchTimeoutRefs.current[workstreamId];
+        }
+      });
+    };
+  }, [projectObjectiveSearchTerms, workstreams]);
+
+  const handleProjectObjectiveSelect = (workstreamId, objective) => {
+    const selectedName = objective.contributorFacingProjectName || objective.name;
+    
+    // Clear any pending search timeout immediately
+    if (projectObjectiveSearchTimeoutRefs.current[workstreamId]) {
+      clearTimeout(projectObjectiveSearchTimeoutRefs.current[workstreamId]);
+      delete projectObjectiveSearchTimeoutRefs.current[workstreamId];
+    }
+    
+    // Mark this as a recent selection to prevent search loop
+    recentSelectionsRef.current[workstreamId] = {
+      name: selectedName,
+      timestamp: Date.now()
+    };
+    
+    // Update workstream with selected objective
+    setWorkstreams(prev => prev.map(ws => 
+      ws.id === workstreamId 
+        ? {
+            ...ws,
+            projectObjective: selectedName,
+            projectObjectiveId: objective.id
+          }
+        : ws
+    ));
+    
+    // Clear search term instead of setting it to selected name - this prevents re-triggering search
+    setProjectObjectiveSearchTerms(prev => ({
+      ...prev,
+      [workstreamId]: ''
+    }));
+    
+    // Immediately close dropdown and clear results
+    setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+    setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+    setLoadingProjectObjectiveSearch(prev => ({ ...prev, [workstreamId]: false }));
+    
+    // Clear the recent selection flag after a delay
+    setTimeout(() => {
+      if (recentSelectionsRef.current[workstreamId]) {
+        delete recentSelectionsRef.current[workstreamId];
+      }
+    }, 2000);
+  };
+
+  const handleClearProjectObjective = (workstreamId) => {
+    setWorkstreams(prev => prev.map(ws => 
+      ws.id === workstreamId 
+        ? {
+            ...ws,
+            projectObjective: '',
+            projectObjectiveId: ''
+          }
+        : ws
+    ));
+    setProjectObjectiveSearchTerms(prev => ({ ...prev, [workstreamId]: '' }));
+    setProjectObjectiveSearchResults(prev => ({ ...prev, [workstreamId]: [] }));
+    setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstreamId]: false }));
+  };
+
+  const handleInputChange = (workstreamId, field, value) => {
+    setWorkstreams(prev => prev.map(ws => 
+      ws.id === workstreamId ? { ...ws, [field]: value } : ws
+    ));
+  };
+
+  const handleSearchTermChange = (workstreamId, value) => {
+    setProjectObjectiveSearchTerms(prev => ({
+      ...prev,
+      [workstreamId]: value
+    }));
+    if (value === '') {
+      handleClearProjectObjective(workstreamId);
+    }
+  };
+
+  const toggleWorkstreamExpanded = (workstreamId) => {
+    setExpandedWorkstreams(prev => ({
+      ...prev,
+      [workstreamId]: !prev[workstreamId]
+    }));
+  };
+
+  const addWorkstream = () => {
+    const newId = Date.now();
+    setWorkstreams(prev => [...prev, {
+      id: newId,
+      projectWorkstreamName: '',
+      projectObjective: '',
+      projectObjectiveId: '',
+      refresh: false,
+      deliveryToolName: '',
+      clientWorkstreamIdentifier: '',
+      functionality: ''
+    }]);
+    setExpandedWorkstreams(prev => ({ ...prev, [newId]: true }));
+    setProjectObjectiveSearchTerms(prev => ({ ...prev, [newId]: '' }));
+  };
+
+  const removeWorkstream = (workstreamId) => {
+    if (workstreams.length === 1) {
+      toast.error('At least one workstream is required');
+      return;
+    }
+    setWorkstreams(prev => prev.filter(ws => ws.id !== workstreamId));
+    setExpandedWorkstreams(prev => {
+      const newState = { ...prev };
+      delete newState[workstreamId];
+      return newState;
+    });
+    setProjectObjectiveSearchTerms(prev => {
+      const newState = { ...prev };
+      delete newState[workstreamId];
+      return newState;
+    });
+    setProjectObjectiveSearchResults(prev => {
+      const newState = { ...prev };
+      delete newState[workstreamId];
+      return newState;
+    });
+    setShowProjectObjectiveDropdowns(prev => {
+      const newState = { ...prev };
+      delete newState[workstreamId];
+      return newState;
+    });
+    if (projectObjectiveSearchTimeoutRefs.current[workstreamId]) {
+      clearTimeout(projectObjectiveSearchTimeoutRefs.current[workstreamId]);
+      delete projectObjectiveSearchTimeoutRefs.current[workstreamId];
+    }
+  };
+
+  const validateWorkstream = (workstream) => {
+    // Project Objective is required (either ID or name)
+    if (!workstream.projectObjectiveId && (!workstream.projectObjective || workstream.projectObjective.trim() === '')) {
+      return 'Project Objective is required';
+    }
+    if (!workstream.deliveryToolName || workstream.deliveryToolName === '--None--' || workstream.deliveryToolName.trim() === '') {
+      return 'Delivery Tool Name is required';
+    }
+    if (!workstream.clientWorkstreamIdentifier || workstream.clientWorkstreamIdentifier.trim() === '') {
+      return 'Client Workstream Identifier is required';
+    }
+    if (!workstream.functionality || workstream.functionality === '--None--' || workstream.functionality.trim() === '') {
+      return 'Functionality is required';
+    }
+    return null;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Validate all workstreams
+    const validationErrors = [];
+    workstreams.forEach((workstream, index) => {
+      const error = validateWorkstream(workstream);
+      if (error) {
+        validationErrors.push(`Workstream ${index + 1}: ${error}`);
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      toast.error(validationErrors[0]);
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Create all workstreams - each under its respective project objective
+      const createPromises = workstreams.map(workstream => 
+        apiClient.post('/workstream/create', {
+          projectWorkstreamName: workstream.projectWorkstreamName,
+          projectObjective: workstream.projectObjective,
+          projectObjectiveId: workstream.projectObjectiveId,
+          refresh: workstream.refresh,
+          deliveryToolName: workstream.deliveryToolName,
+          clientWorkstreamIdentifier: workstream.clientWorkstreamIdentifier,
+          functionality: workstream.functionality
+        })
+      );
+
+      const results = await Promise.all(createPromises);
+      const successCount = results.filter(r => r.data.success).length;
+      
+      if (successCount === workstreams.length) {
+        toast.success(`Successfully created ${successCount} workstream(s)`);
+        // Reset all workstreams and hide form
+        const newId = Date.now();
+        setWorkstreams([{
+          id: newId,
+          projectWorkstreamName: '',
+          projectObjective: '',
+          projectObjectiveId: '',
+          refresh: false,
+          deliveryToolName: '',
+          clientWorkstreamIdentifier: '',
+          functionality: ''
+        }]);
+        setExpandedWorkstreams({ [newId]: true });
+        setProjectObjectiveSearchTerms({ [newId]: '' });
+        setProjectObjectiveSearchResults({});
+        setShowProjectObjectiveDropdowns({});
+        setShowForm(false);
+        // Reload project objectives list
+        fetchProjectObjectives(0, false);
+      } else {
+        toast.error(`Created ${successCount} of ${workstreams.length} workstream(s)`);
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create workstream(s)';
+      toast.error(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancel = () => {
+    // Reset all workstreams and hide form
+    const newId = Date.now();
+    setWorkstreams([{
+      id: newId,
+      projectWorkstreamName: '',
+      projectObjective: '',
+      projectObjectiveId: '',
+      refresh: false,
+      deliveryToolName: '',
+      clientWorkstreamIdentifier: '',
+      functionality: ''
+    }]);
+    setExpandedWorkstreams({ [newId]: true });
+    setProjectObjectiveSearchTerms({ [newId]: '' });
+    setProjectObjectiveSearchResults({});
+    setShowProjectObjectiveDropdowns({});
+    setShowForm(false);
+    // Reload project objectives list
+    fetchProjectObjectives(0, false);
+  };
+
+  const handleAddWorkstream = () => {
+    setShowForm(true);
+  };
+
+  // Save current workstreams as template
+  const handleSaveTemplate = () => {
+    if (workstreams.length === 0) {
+      toast.error('No workstreams to save as template');
+      return;
+    }
+    setShowTemplateModal(true);
+  };
+
+  const confirmSaveTemplate = () => {
+    if (!templateName.trim()) {
+      toast.error('Please enter a template name');
+      return;
+    }
+
+    try {
+      const template = {
+        id: Date.now(),
+        name: templateName.trim(),
+        createdAt: new Date().toISOString(),
+        workstreams: workstreams.map(ws => ({
+          projectWorkstreamName: ws.projectWorkstreamName,
+          projectObjective: ws.projectObjective,
+          projectObjectiveId: ws.projectObjectiveId,
+          refresh: ws.refresh,
+          deliveryToolName: ws.deliveryToolName,
+          clientWorkstreamIdentifier: ws.clientWorkstreamIdentifier,
+          functionality: ws.functionality
+        }))
+      };
+
+      const updatedTemplates = [...savedTemplates, template];
+      setSavedTemplates(updatedTemplates);
+      localStorage.setItem('workstreamTemplates', JSON.stringify(updatedTemplates));
+      toast.success('Template saved successfully');
+      setShowTemplateModal(false);
+      setTemplateName('');
+    } catch (error) {
+      console.error('Error saving template:', error);
+      toast.error('Failed to save template');
+    }
+  };
+
+  // Load template
+  const handleLoadTemplate = (template) => {
+    try {
+      const newWorkstreams = template.workstreams.map((ws, index) => ({
+        id: Date.now() + index,
+        ...ws
+      }));
+      setWorkstreams(newWorkstreams);
+      setExpandedWorkstreams(newWorkstreams.reduce((acc, ws) => {
+        acc[ws.id] = true;
+        return acc;
+      }, {}));
+      setShowLoadTemplateModal(false);
+      toast.success(`Template "${template.name}" loaded successfully`);
+    } catch (error) {
+      console.error('Error loading template:', error);
+      toast.error('Failed to load template');
+    }
+  };
+
+  // Delete template
+  const handleDeleteTemplate = (templateId) => {
+    try {
+      const updatedTemplates = savedTemplates.filter(t => t.id !== templateId);
+      setSavedTemplates(updatedTemplates);
+      localStorage.setItem('workstreamTemplates', JSON.stringify(updatedTemplates));
+      toast.success('Template deleted successfully');
+    } catch (error) {
+      console.error('Error deleting template:', error);
+      toast.error('Failed to delete template');
+    }
+  };
+
+  // Clone workstream
+  const handleCloneWorkstream = (workstreamId) => {
+    const workstreamToClone = workstreams.find(ws => ws.id === workstreamId);
+    if (!workstreamToClone) return;
+
+    const clonedWorkstream = {
+      ...workstreamToClone,
+      id: Date.now(),
+      projectWorkstreamName: `${workstreamToClone.projectWorkstreamName} (Copy)`,
+      projectObjective: '',
+      projectObjectiveId: ''
+    };
+
+    setWorkstreams(prev => [...prev, clonedWorkstream]);
+    setExpandedWorkstreams(prev => ({ ...prev, [clonedWorkstream.id]: true }));
+    toast.success('Workstream cloned successfully');
+  };
+
+  // Download template for workstream creation
+  const handleDownloadTemplate = () => {
+    try {
+      const templateData = [
+        {
+          'Project Workstream Name': 'Example Workstream 1',
+          'Project Objective Name': 'Example Project Objective',
+          'Project Objective ID': '',
+          'Delivery Tool Name': 'Tool1',
+          'Client Workstream Identifier': 'WS-001',
+          'Functionality': 'Functionality1',
+          'Refresh': false
+        },
+        {
+          'Project Workstream Name': 'Example Workstream 2',
+          'Project Objective Name': 'Example Project Objective 2',
+          'Project Objective ID': '',
+          'Delivery Tool Name': 'Tool2',
+          'Client Workstream Identifier': 'WS-002',
+          'Functionality': 'Functionality2',
+          'Refresh': false
+        }
+      ];
+
+      const ws = XLSX.utils.json_to_sheet(templateData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Workstream Template');
+      XLSX.writeFile(wb, `Workstream_Creation_Template_${new Date().toISOString().split('T')[0]}.xlsx`);
+      toast.success('Template downloaded successfully');
+    } catch (error) {
+      console.error('Error downloading template:', error);
+      toast.error('Failed to download template');
+    }
+  };
+
+  // Handle template file import
+  const handleImportTemplate = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        if (jsonData.length === 0) {
+          toast.error('Template file is empty');
+          return;
+        }
+
+        // Map imported data to workstream format
+        let imported = jsonData.map((row, index) => ({
+          id: Date.now() + index,
+          projectWorkstreamName: row['Project Workstream Name'] || row['projectWorkstreamName'] || '',
+          projectObjective: row['Project Objective Name'] || row['projectObjective'] || row['Project Objective'] || '',
+          projectObjectiveId: row['Project Objective ID'] || row['projectObjectiveId'] || '',
+          deliveryToolName: row['Delivery Tool Name'] || row['deliveryToolName'] || '',
+          clientWorkstreamIdentifier: row['Client Workstream Identifier'] || row['clientWorkstreamIdentifier'] || '',
+          functionality: row['Functionality'] || row['functionality'] || '',
+          refresh: row['Refresh'] || row['refresh'] || false
+        }));
+
+        // Resolve Project Objective names to IDs if ID is not provided
+        const unresolvedObjectives = imported.filter(ws => ws.projectObjective && !ws.projectObjectiveId);
+        if (unresolvedObjectives.length > 0) {
+          setResolvingObjectives(true);
+          toast('Resolving project objective names to IDs...', { icon: '⏳', duration: 2000 });
+          
+          // Resolve each project objective name to ID
+          for (const ws of unresolvedObjectives) {
+            try {
+              const searchTerm = ws.projectObjective.trim();
+              if (searchTerm) {
+                const response = await apiClient.get(`/workstream/search-project-objectives?search=${encodeURIComponent(searchTerm)}`);
+                if (response.data.success && response.data.projectObjectives && response.data.projectObjectives.length > 0) {
+                  // Try to find exact match first
+                  let matched = response.data.projectObjectives.find(po => 
+                    po.name === searchTerm || 
+                    po.contributorFacingProjectName === searchTerm ||
+                    (po.name && po.name.toLowerCase() === searchTerm.toLowerCase()) ||
+                    (po.contributorFacingProjectName && po.contributorFacingProjectName.toLowerCase() === searchTerm.toLowerCase())
+                  );
+                  
+                  // If no exact match, use the first result
+                  if (!matched) {
+                    matched = response.data.projectObjectives[0];
+                  }
+                  
+                  if (matched) {
+                    ws.projectObjectiveId = matched.id;
+                    ws.projectObjective = matched.contributorFacingProjectName || matched.name || ws.projectObjective;
+                  }
+                }
+              }
+            } catch (error) {
+              console.error(`Error resolving project objective for "${ws.projectObjective}":`, error);
+              // Continue with other workstreams even if one fails
+            }
+          }
+          
+          setResolvingObjectives(false);
+        }
+
+        setImportedWorkstreams(imported);
+        setShowImportPreview(true);
+        const resolvedCount = unresolvedObjectives.length > 0 ? unresolvedObjectives.filter(ws => ws.projectObjectiveId).length : 0;
+        if (unresolvedObjectives.length > 0) {
+          toast.success(`Imported ${imported.length} workstream(s). Resolved ${resolvedCount} of ${unresolvedObjectives.length} project objective(s).`);
+        } else {
+          toast.success(`Imported ${imported.length} workstream(s) from template`);
+        }
+      } catch (error) {
+        console.error('Error importing template:', error);
+        toast.error('Failed to import template. Please check the file format.');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    // Reset file input
+    event.target.value = '';
+  };
+
+  // Create workstreams from imported template
+  const handleCreateFromImport = async () => {
+    if (importedWorkstreams.length === 0) {
+      toast.error('No workstreams to create');
+      return;
+    }
+
+    // Resolve any remaining unresolved project objectives
+    const unresolved = importedWorkstreams.filter(ws => ws.projectObjective && !ws.projectObjectiveId);
+    if (unresolved.length > 0) {
+      toast('Resolving remaining project objectives...', { icon: '⏳' });
+      
+      for (const ws of unresolved) {
+        try {
+          const searchTerm = ws.projectObjective.trim();
+          if (searchTerm) {
+            const response = await apiClient.get(`/workstream/search-project-objectives?search=${encodeURIComponent(searchTerm)}`);
+            if (response.data.success && response.data.projectObjectives && response.data.projectObjectives.length > 0) {
+              // Try to find exact match first
+              let matched = response.data.projectObjectives.find(po => 
+                po.name === searchTerm || 
+                po.contributorFacingProjectName === searchTerm ||
+                (po.name && po.name.toLowerCase() === searchTerm.toLowerCase()) ||
+                (po.contributorFacingProjectName && po.contributorFacingProjectName.toLowerCase() === searchTerm.toLowerCase())
+              );
+              
+              // If no exact match, use the first result
+              if (!matched) {
+                matched = response.data.projectObjectives[0];
+              }
+              
+              if (matched) {
+                ws.projectObjectiveId = matched.id;
+                ws.projectObjective = matched.contributorFacingProjectName || matched.name || ws.projectObjective;
+              }
+            }
+          }
+        } catch (error) {
+          console.error(`Error resolving project objective for "${ws.projectObjective}":`, error);
+        }
+      }
+      
+      // Update the imported workstreams state with resolved IDs
+      setImportedWorkstreams([...importedWorkstreams]);
+    }
+
+    // Validate all imported workstreams
+    const validationErrors = [];
+    importedWorkstreams.forEach((workstream, index) => {
+      const error = validateWorkstream(workstream);
+      if (error) {
+        validationErrors.push(`Row ${index + 1}: ${error}`);
+      }
+    });
+
+    if (validationErrors.length > 0) {
+      toast.error(validationErrors[0]);
+      return;
+    }
+
+    setImporting(true);
+    try {
+      // Create all workstreams
+      const createPromises = importedWorkstreams.map(workstream => 
+        apiClient.post('/workstream/create', {
+          projectWorkstreamName: workstream.projectWorkstreamName,
+          projectObjective: workstream.projectObjective,
+          projectObjectiveId: workstream.projectObjectiveId,
+          refresh: workstream.refresh,
+          deliveryToolName: workstream.deliveryToolName,
+          clientWorkstreamIdentifier: workstream.clientWorkstreamIdentifier,
+          functionality: workstream.functionality
+        })
+      );
+
+      const results = await Promise.all(createPromises);
+      const successCount = results.filter(r => r.data.success).length;
+      
+      if (successCount === importedWorkstreams.length) {
+        toast.success(`Successfully created ${successCount} workstream(s) from template`);
+        setShowImportPreview(false);
+        setImportedWorkstreams([]);
+        // Reload project objectives list
+        fetchProjectObjectives(0, false);
+      } else {
+        toast.error(`Created ${successCount} of ${importedWorkstreams.length} workstream(s)`);
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to create workstream(s)';
+      toast.error(errorMessage);
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const renderWorkstreamForm = (workstream, index) => {
+    const isExpanded = expandedWorkstreams[workstream.id] !== false;
+    const searchTerm = projectObjectiveSearchTerms[workstream.id] || '';
+    const searchResults = projectObjectiveSearchResults[workstream.id] || [];
+    const loadingSearch = loadingProjectObjectiveSearch[workstream.id] || false;
+    const showDropdown = showProjectObjectiveDropdowns[workstream.id] || false;
+
+    return (
+      <div key={workstream.id} className="workstream-form-card">
+        <div 
+          className="create-workstream-header-section"
+          onClick={() => toggleWorkstreamExpanded(workstream.id)}
+        >
+          <button
+            type="button"
+            className="create-workstream-toggle"
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleWorkstreamExpanded(workstream.id);
+            }}
+          >
+            {isExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+          </button>
+          <span className="create-workstream-title-text">
+            WorkStream {index + 1}{workstream.projectObjective ? ` - ${workstream.projectObjective}` : ''}
+          </span>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="create-workstream-remove"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCloneWorkstream(workstream.id);
+              }}
+              title="Clone workstream"
+              style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
+            >
+              <Copy size={16} style={{ color: '#0176d3' }} />
+            </button>
+            {workstreams.length > 1 && (
+              <button
+                type="button"
+                className="create-workstream-remove"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  removeWorkstream(workstream.id);
+                }}
+                title="Remove workstream"
+              >
+                <Trash2 size={16} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {isExpanded && (
+          <div className="workstream-form-content">
+            <div className="form-section-card">
+              <div className="form-grid-two-column">
+                <div className="form-column">
+                  <div className="form-group">
+                    <label>Project Workstream Name</label>
+                    <input
+                      type="text"
+                      value={workstream.projectWorkstreamName}
+                      onChange={(e) => handleInputChange(workstream.id, 'projectWorkstreamName', e.target.value)}
+                      className="form-input-compact"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>
+                      Project Objective <span className="required">*</span>
+                    </label>
+                    <div className={`project-objective-search-container project-objective-search-container-${workstream.id}`}>
+                      <div className="search-input-wrapper">
+                        <Search size={14} className="search-icon" />
+                        <input
+                          type="text"
+                          placeholder="Search for project objective..."
+                          value={workstream.projectObjectiveId ? workstream.projectObjective : searchTerm}
+                          readOnly={!!workstream.projectObjectiveId}
+                          onChange={(e) => {
+                            // Only allow changes if no objective is selected
+                            if (!workstream.projectObjectiveId) {
+                              handleSearchTermChange(workstream.id, e.target.value);
+                            }
+                          }}
+                          onFocus={() => {
+                            // If there's a selection, allow clearing it
+                            if (workstream.projectObjectiveId) {
+                              // User can click X button to clear
+                            } else if (searchResults.length > 0) {
+                              setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstream.id]: true }));
+                            }
+                          }}
+                          onClick={() => {
+                            // If there's a selection and user clicks, don't clear automatically
+                            // They need to use the X button
+                            if (!workstream.projectObjectiveId && searchResults.length > 0) {
+                              setShowProjectObjectiveDropdowns(prev => ({ ...prev, [workstream.id]: true }));
+                            }
+                          }}
+                          className="form-input-compact search-input"
+                          style={workstream.projectObjectiveId ? { cursor: 'default' } : {}}
+                        />
+                        {workstream.projectObjectiveId && (
+                          <button
+                            type="button"
+                            onClick={() => handleClearProjectObjective(workstream.id)}
+                            className="clear-button"
+                            title="Clear selection"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                      {loadingSearch && (
+                        <div className="searching-indicator">Searching...</div>
+                      )}
+                      {showDropdown && searchResults.length > 0 && !workstream.projectObjectiveId && (
+                        <div className="search-results-dropdown">
+                          {searchResults.map((objective) => (
+                            <div
+                              key={objective.id}
+                              onClick={() => handleProjectObjectiveSelect(workstream.id, objective)}
+                              className={`search-result-item ${workstream.projectObjectiveId === objective.id ? 'selected' : ''}`}
+                            >
+                              <div className="search-result-name">
+                                {objective.contributorFacingProjectName || objective.name}
+                              </div>
+                              {objective.projectName && (
+                                <div className="search-result-subtitle">
+                                  Project: {objective.projectName}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ marginTop: '6px' }}>
+                    <label className="checkbox-label" style={{ marginBottom: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={workstream.refresh}
+                        onChange={(e) => handleInputChange(workstream.id, 'refresh', e.target.checked)}
+                        className="checkbox-input"
+                        style={{ marginRight: '8px', marginTop: '0', verticalAlign: 'middle' }}
+                      />
+                      <span className="checkbox-text" style={{ verticalAlign: 'middle' }}>Refresh</span>
+                      <Info size={12} className="info-icon" style={{ marginLeft: '6px', verticalAlign: 'middle' }} />
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-column">
+                  <div className="form-group">
+                    <label>
+                      Delivery Tool Name <span className="required">*</span>
+                    </label>
+                    <select
+                      value={workstream.deliveryToolName}
+                      onChange={(e) => handleInputChange(workstream.id, 'deliveryToolName', e.target.value)}
+                      className="form-input-compact"
+                      required
+                    >
+                      <option value="">--None--</option>
+                      {deliveryToolNameOptions.filter(opt => opt !== '--None--').map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="form-group">
+                    <label>
+                      Client Workstream Identifier <span className="required">*</span>
+                      <Info size={12} className="info-icon" />
+                    </label>
+                    <input
+                      type="text"
+                      value={workstream.clientWorkstreamIdentifier}
+                      onChange={(e) => handleInputChange(workstream.id, 'clientWorkstreamIdentifier', e.target.value)}
+                      className="form-input-compact"
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>
+                      Functionality <span className="required">*</span>
+                      <Info size={12} className="info-icon" />
+                    </label>
+                    <select
+                      value={workstream.functionality}
+                      onChange={(e) => handleInputChange(workstream.id, 'functionality', e.target.value)}
+                      className="form-input-compact"
+                      required
+                    >
+                      <option value="">--None--</option>
+                      {functionalityOptions.filter(opt => opt !== '--None--').map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const content = (
+    <div className="create-workstream-content">
+      {!showForm ? (
+        <>
+          {/* Header with Add Workstream button */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', marginTop: '8px', paddingTop: '8px', flexWrap: 'wrap', gap: '12px' }}>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 600, color: '#002329' }}>
+              Project Objectives Without Workstreams
+            </h2>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={handleDownloadTemplate}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Download template for workstream creation"
+              >
+                <FileText size={16} />
+                Download Template
+              </button>
+              <label
+                className="btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', margin: 0 }}
+                title="Import template file"
+              >
+                <Upload size={16} />
+                Import Template
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImportTemplate}
+                  style={{ display: 'none' }}
+                />
+              </label>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={handleAddWorkstream}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              >
+                <Plus size={16} />
+                Add Workstream
+              </button>
+            </div>
+          </div>
+
+          {/* Filter Section */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}>
+            <label style={{ fontSize: '14px', fontWeight: 500, color: '#002329' }}>
+              Filter by Status:
+            </label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                fontSize: '14px',
+                padding: '8px 12px',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-md)',
+                background: 'var(--surface)',
+                color: 'var(--text-primary)',
+                minWidth: '180px',
+                cursor: 'pointer',
+                fontFamily: 'Poppins'
+              }}
+            >
+              <option value="">All Status</option>
+              {uniqueStatuses.map(status => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+            {statusFilter && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter('')}
+                style={{
+                  fontSize: '13px',
+                  padding: '6px 12px',
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-md)',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins'
+                }}
+              >
+                Clear Filter
+              </button>
+            )}
+          </div>
+
+          {/* Project Objectives Table */}
+          {loadingPOs && allProjectObjectives.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '40px' }}>
+              <Loader className="spinning" size={24} />
+              <p>Loading project objectives...</p>
+            </div>
+          ) : (
+            <div className="project-objectives-table-container" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+              <table className="project-objectives-table" style={{ width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th>Project Objective</th>
+                    <th>Associated Project</th>
+                    <th>Project Objective Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {projectObjectives.length === 0 ? (
+                    <tr>
+                      <td colSpan="3" className="no-data" style={{ textAlign: 'center', padding: '40px' }}>
+                        No project objectives without workstreams found
+                      </td>
+                    </tr>
+                  ) : (
+                    projectObjectives.map((po, index) => (
+                      <tr key={po.id || index}>
+                        <td>{po.name || '--'}</td>
+                        <td>{po.projectName || '--'}</td>
+                        <td>{po.status || '--'}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+              
+              {/* Show More Button and Loading States */}
+              {((poHasMore || allProjectObjectives.length >= 1000) && !loadingMorePOs && allProjectObjectives.length > 0 && !loadingPOs) && (
+                <div style={{ textAlign: 'center', padding: '20px', borderTop: '1px solid var(--border-color)' }}>
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => fetchProjectObjectives(poOffset, true)}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 24px',
+                      fontSize: '14px',
+                      fontWeight: 600
+                    }}
+                  >
+                    <Plus size={16} />
+                    Show More ({allProjectObjectives.length} loaded{poHasMore ? ', more available' : ''})
+                  </button>
+                  <div style={{ marginTop: '8px', fontSize: '12px', color: '#666' }}>
+                    Click to load next 1000 project objectives
+                  </div>
+                </div>
+              )}
+              
+              {loadingMorePOs && (
+                <div style={{ textAlign: 'center', padding: '20px', borderTop: '1px solid var(--border-color)' }}>
+                  <Loader className="spinning" size={16} />
+                  <span style={{ marginLeft: '8px' }}>Loading more project objectives...</span>
+                </div>
+              )}
+              
+              {/* Infinite scroll trigger (backup - hidden but still functional) */}
+              {poHasMore && !loadingMorePOs && (
+                <div
+                  ref={infiniteScrollRef}
+                  style={{ height: '20px', width: '100%' }}
+                />
+              )}
+              
+              {allProjectObjectives.length > 0 && !poHasMore && (
+                <div style={{ textAlign: 'center', padding: '16px', borderTop: '1px solid var(--border-color)', color: '#666', fontSize: '13px' }}>
+                  {statusFilter ? (
+                    <>Showing {projectObjectives.length} of {allProjectObjectives.length} project objectives (filtered by status: {statusFilter})</>
+                  ) : (
+                    <>All {allProjectObjectives.length} project objectives loaded</>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : (
+        <form onSubmit={handleSubmit} className="create-workstream-form">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 600, color: '#002329' }}>
+              Create Workstream
+            </h2>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setShowForm(false)}
+            >
+              Back to List
+            </button>
+          </div>
+
+          <div style={{ marginBottom: '16px', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={addWorkstream}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <Plus size={16} />
+              Add WorkStream
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleSaveTemplate}
+              disabled={workstreams.length === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              title="Save current workstreams as template"
+            >
+              <Save size={16} />
+              Save Template
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => setShowLoadTemplateModal(true)}
+              disabled={savedTemplates.length === 0}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+              title="Load a saved template"
+            >
+              <FolderOpen size={16} />
+              Load Template
+            </button>
+          </div>
+
+          {workstreams.map((workstream, index) => renderWorkstreamForm(workstream, index))}
+
+          <div className="form-actions">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleCancel}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={submitting}
+            >
+              {submitting ? 'Creating...' : `Create ${workstreams.length} WorkStream${workstreams.length > 1 ? 's' : ''}`}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Save Template Modal */}
+      {showTemplateModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '24px',
+            borderRadius: '8px',
+            minWidth: '400px',
+            maxWidth: '500px'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>Save Template</h3>
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '14px', fontWeight: 500 }}>
+                Template Name:
+              </label>
+              <input
+                type="text"
+                value={templateName}
+                onChange={(e) => setTemplateName(e.target.value)}
+                placeholder="Enter template name"
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  fontSize: '14px'
+                }}
+                autoFocus
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter') {
+                    confirmSaveTemplate();
+                  }
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setShowTemplateModal(false);
+                  setTemplateName('');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={confirmSaveTemplate}
+                disabled={!templateName.trim()}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Load Template Modal */}
+      {showLoadTemplateModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 1000
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '24px',
+            borderRadius: '8px',
+            minWidth: '500px',
+            maxWidth: '600px',
+            maxHeight: '80vh',
+            overflow: 'auto'
+          }}>
+            <h3 style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: 600 }}>Load Template</h3>
+            {savedTemplates.length === 0 ? (
+              <p style={{ color: '#666', fontSize: '14px' }}>No saved templates found.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {savedTemplates.map((template) => (
+                  <div
+                    key={template.id}
+                    style={{
+                      padding: '12px',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '4px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: '14px', marginBottom: '4px' }}>
+                        {template.name}
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#666' }}>
+                        {template.workstreams.length} workstream(s) • Created {new Date(template.createdAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        className="btn-primary"
+                        onClick={() => handleLoadTemplate(template)}
+                        style={{ fontSize: '12px', padding: '6px 12px' }}
+                      >
+                        Load
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary"
+                        onClick={() => handleDeleteTemplate(template.id)}
+                        style={{ fontSize: '12px', padding: '6px 12px', color: '#d32f2f' }}
+                        title="Delete template"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowLoadTemplateModal(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  // Import Preview Modal (shared between both render paths)
+  const importPreviewModal = showImportPreview && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0, 0, 0, 0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999
+        }}>
+          <div style={{
+            background: 'white',
+            padding: '24px',
+            borderRadius: '8px',
+            minWidth: '800px',
+            maxWidth: '90vw',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 600 }}>Import Preview</h3>
+              <button
+                onClick={() => {
+                  setShowImportPreview(false);
+                  setImportedWorkstreams([]);
+                  setResolvingObjectives(false);
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            {resolvingObjectives && (
+              <div style={{ padding: '12px', background: '#f0f9ff', borderRadius: '4px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Loader className="spinning" size={16} style={{ color: '#08979C' }} />
+                <span style={{ fontSize: '13px', color: '#0369a1' }}>Resolving project objectives...</span>
+              </div>
+            )}
+            
+            <div style={{ flex: 1, overflow: 'auto', marginBottom: '16px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+                <thead>
+                  <tr>
+                    <th>Project Workstream Name</th>
+                    <th>Project Objective</th>
+                    <th>Delivery Tool Name</th>
+                    <th>Client Workstream Identifier</th>
+                    <th>Functionality</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importedWorkstreams.map((ws, index) => {
+                    const error = validateWorkstream(ws);
+                    return (
+                      <tr key={index} style={{ background: error ? '#fee' : 'white' }}>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>{ws.projectWorkstreamName || '--'}</td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>{ws.projectObjective || '--'}</td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>{ws.deliveryToolName || '--'}</td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>{ws.clientWorkstreamIdentifier || '--'}</td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>
+                          {ws.functionality || '--'}
+                          {error && <div style={{ fontSize: '11px', color: '#c33', marginTop: '4px' }}>{error}</div>}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button
+                onClick={() => {
+                  setShowImportPreview(false);
+                  setImportedWorkstreams([]);
+                }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateFromImport}
+                disabled={importing || importedWorkstreams.some(ws => validateWorkstream(ws))}
+                className="btn-primary"
+              >
+                {importing ? 'Creating...' : `Create ${importedWorkstreams.length} Workstream(s)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+
+  if (hideHeader) {
+    return (
+      <>
+        <div className="create-workstream-content-wrapper">{content}</div>
+        {importPreviewModal}
+      </>
+    );
+  }
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      
+      <div className="create-workstream" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease' }}>
+        <div className="create-workstream-container">
+          <div className="create-workstream-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button 
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">New Project Workstream</h1>
+                  <p className="page-subtitle">Create a new project workstream</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <div className="user-profile">
+                  <div className="user-avatar">
+                    {(user?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="user-name">{user?.email || 'User'}</span>
+                  <button className="logout-btn" onClick={logout} title="Logout">
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          {content}
+        </div>
+      </div>
+      {importPreviewModal}
+    </div>
+  );
+};
+
+export default CreateWorkStream;

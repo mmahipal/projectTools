@@ -1,0 +1,704 @@
+/* Payment Adjustments - Match PO Pay Rates structure exactly */
+.payment-adjustments-container {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  color: #002329;
+  font-family: Poppins;
+  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg-primary, #f5f5f5);
+  overflow-x: hidden;
+  overflow-y: hidden;
+}
+
+.payment-adjustments-main-wrapper {
+  transition: margin-left 0.3s ease, width 0.3s ease;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.payment-adjustments-header {
+  background: var(--surface, #fff);
+  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  padding: 4px 16px;
+  margin: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: none;
+}
+
+.payment-adjustments-container .header-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.payment-adjustments-container .header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+}
+
+.payment-adjustments-container .header-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #002329;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.payment-adjustments-container .header-menu-toggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.payment-adjustments-container .page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary, #002329);
+  margin-bottom: 2px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+  padding: 0;
+}
+
+.payment-adjustments-container .page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+  font-weight: 400;
+  line-height: 1.3;
+  margin: 0;
+  padding: 0;
+}
+
+.payment-adjustments-container .header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.payment-adjustments-container .header-user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md, 16px);
+  flex-shrink: 0;
+}
+
+/* Main Content Area */
+.payment-adjustments-content {
+  padding: 24px;
+  background: var(--bg-primary);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.payment-adjustments-main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* Actions Toolbar */
+.payment-adjustments-container .btn-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #002329;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: Poppins;
+  white-space: nowrap;
+}
+
+.payment-adjustments-container .btn-action:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.payment-adjustments-container .btn-action.active {
+  background: #f0f9ff;
+  border-color: #0284c7;
+  color: #0284c7;
+}
+
+.payment-adjustments-container .action-badge {
+  background: #0284c7;
+  color: #fff;
+  border-radius: 10px;
+  padding: 2px 6px;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.payment-adjustments-container .btn-export-csv {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #002329;
+  cursor: pointer;
+  font-family: Poppins;
+  white-space: nowrap;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.payment-adjustments-container .btn-export-csv:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.payment-adjustments-container .btn-export-csv:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Loading wrapper styles - ensure proper centering */
+.payment-adjustments-loading-wrapper {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 100vh !important;
+  width: 100% !important;
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.payment-adjustments-loading-content {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  width: auto !important;
+  height: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Content Header - Match Workstream Management exactly */
+.payment-adjustments-container .content-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  flex-shrink: 0;
+}
+
+/* New Payment Adjustment Button - Match other pages */
+.payment-adjustments-container .btn-new-payment-adjustment {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #002329;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: Poppins;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.payment-adjustments-container .btn-new-payment-adjustment:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.payment-adjustments-container .content-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #002329;
+}
+
+/* Table styling */
+.payment-adjustments-container .case-table-container {
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.payment-adjustments-container .case-table-scroll-wrapper {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  overflow-x: auto !important;
+  min-height: 0 !important;
+  position: relative !important;
+  height: 0 !important; /* Force flex child to respect flex: 1 */
+}
+
+/* Scrollbar styles for table */
+.payment-adjustments-container .case-table-scroll-wrapper::-webkit-scrollbar {
+  height: 8px !important;
+  width: 8px !important;
+}
+
+.payment-adjustments-container .case-table-scroll-wrapper::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+}
+
+.payment-adjustments-container .case-table-scroll-wrapper::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 4px !important;
+}
+
+.payment-adjustments-container .case-table-scroll-wrapper::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+
+/* Table loading state */
+.payment-adjustments-container .case-table-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 20px;
+  min-height: 400px;
+  width: 100%;
+  text-align: center;
+}
+
+.payment-adjustments-container .case-table-loading .spinning {
+  animation: spin 1s linear infinite;
+  color: #08979C;
+}
+
+.payment-adjustments-container .case-table-loading p {
+  color: #666;
+  font-size: 14px;
+  margin: 0;
+  font-family: Poppins;
+}
+
+/* Empty state */
+.payment-adjustments-container .case-table-empty {
+  padding: 40px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 14px;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Search Container */
+.payment-adjustments-container .search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 250px;
+  width: 250px;
+}
+
+.payment-adjustments-container .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #6b7280;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.payment-adjustments-container .search-input {
+  width: 100%;
+  padding: 8px 36px 8px 36px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: Poppins;
+  color: #002329;
+  background: #fff;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.payment-adjustments-container .search-input:focus {
+  outline: none;
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+}
+
+.payment-adjustments-container .search-input::placeholder {
+  color: #9ca3af;
+}
+
+.payment-adjustments-container .search-clear-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s;
+  z-index: 2;
+}
+
+.payment-adjustments-container .search-clear-btn:hover {
+  color: #002329;
+}
+
+/* Column selector */
+.payment-adjustments-container .column-selector-wrapper {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: 12px;
+  z-index: 10001;
+}
+
+.payment-adjustments-container .btn-column-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #fff;
+  color: #002329;
+  cursor: pointer;
+  font-family: Poppins;
+  white-space: nowrap;
+  flex-shrink: 0;
+  overflow: visible;
+}
+
+.payment-adjustments-container .column-selector-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 280px;
+  max-height: 400px;
+  overflow-y: auto;
+  z-index: 10001;
+}
+
+.payment-adjustments-container .column-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 2px solid #e5e7eb;
+  font-weight: 700;
+  font-size: 16px;
+  color: #002329;
+  background: #f9fafb;
+}
+
+.payment-adjustments-container .column-selector-list {
+  padding: 8px;
+}
+
+.payment-adjustments-container .column-selector-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.payment-adjustments-container .column-selector-item:hover {
+  background: #f9fafb;
+}
+
+/* Filter Builder */
+.payment-adjustments-container .case-filter-builder {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.payment-adjustments-container .filter-builder-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.payment-adjustments-container .filter-builder-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #002329;
+}
+
+.payment-adjustments-container .btn-close-filter {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.payment-adjustments-container .filter-builder-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.payment-adjustments-container .filter-empty-state {
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+}
+
+.payment-adjustments-container .filter-row {
+  display: grid;
+  grid-template-columns: 2fr 1.5fr 2fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.payment-adjustments-container .filter-field-select,
+.payment-adjustments-container .filter-operator-select,
+.payment-adjustments-container .filter-value-select,
+.payment-adjustments-container .filter-value-input {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: Poppins;
+  background: #fff;
+  color: #002329;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.payment-adjustments-container .filter-value-select:disabled,
+.payment-adjustments-container .filter-value-input:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+}
+
+.payment-adjustments-container .filter-remove-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.payment-adjustments-container .btn-add-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  border: 1px dashed #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+  color: #002329;
+  cursor: pointer;
+  width: fit-content;
+  font-family: Poppins;
+}
+
+.payment-adjustments-container .btn-add-filter:hover {
+  border-color: #0284c7;
+  color: #0284c7;
+  background: #f0f9ff;
+}
+
+.payment-adjustments-container .filter-builder-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.payment-adjustments-container .btn-clear-filters,
+.payment-adjustments-container .btn-submit-filters {
+  padding: 8px 16px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: Poppins;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.payment-adjustments-container .btn-clear-filters {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #002329;
+}
+
+.payment-adjustments-container .btn-clear-filters:hover {
+  background: #f9fafb;
+}
+
+.payment-adjustments-container .btn-submit-filters {
+  background: #08979C;
+  border: none;
+  color: #fff;
+}
+
+.payment-adjustments-container .btn-submit-filters:hover {
+  background: #067a7f;
+}
+
+/* Table styles - Match Workstream Management header exactly */
+.payment-adjustments-container .case-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.payment-adjustments-container .case-table thead {
+  background: #f3f2f2;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.payment-adjustments-container .case-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: #706e6b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #d8dde6;
+  white-space: nowrap;
+  background: #f3f2f2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+.payment-adjustments-container .case-table td {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #002329;
+  border-bottom: 1px solid #e5e7eb;
+  word-wrap: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+/* All columns get equal width */
+.payment-adjustments-container .payment-adjustments-table th.column-equal,
+.payment-adjustments-container .payment-adjustments-table td.column-equal {
+  width: calc(100% / var(--num-columns, 9)) !important;
+  min-width: 120px;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+  text-align: left !important;
+}
+
+/* Ensure table uses fixed layout for proper column sizing */
+.payment-adjustments-container .payment-adjustments-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+/* Ensure proper spacing between columns */
+.payment-adjustments-container .payment-adjustments-table th,
+.payment-adjustments-container .payment-adjustments-table td {
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+/* Clickable field styling for Payment Adjustment Name */
+.payment-adjustments-container .clickable-field {
+  color: #0176d3;
+  text-decoration: underline;
+  text-decoration-color: #0176d3;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.payment-adjustments-container .clickable-field:hover {
+  color: #014486;
+  text-decoration-color: #014486;
+}
+

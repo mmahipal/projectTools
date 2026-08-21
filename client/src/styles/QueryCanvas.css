@@ -1,0 +1,68 @@
+/* Query Canvas - Scoped Styles */
+
+.query-canvas {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background: #fff;
+  position: relative;
+}
+
+.canvas-content {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 100%;
+}
+
+.add-relationship-section,
+.add-subquery-section,
+.add-object-section {
+  display: flex;
+  justify-content: center;
+  padding: 8px;
+}
+
+.add-relationship-btn,
+.add-subquery-btn,
+.add-object-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border: 2px dashed #d9d9d9;
+  border-radius: 8px;
+  background: #fff;
+  color: #6b7280;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: 'Poppins', sans-serif;
+}
+
+.add-relationship-btn:hover,
+.add-subquery-btn:hover,
+.add-object-btn:hover {
+  border-color: #08979C;
+  color: #08979C;
+  background: #f0fdfa;
+}
+
+/* Multi-Object Support */
+.object-card-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  margin-bottom: 12px;
+}
+
+.object-card-container:last-child {
+  margin-bottom: 0;
+}
+

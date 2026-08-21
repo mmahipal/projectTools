@@ -1,0 +1,905 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import { Menu } from 'lucide-react';
+import UserProfileDropdown from '../components/UserProfileDropdown/UserProfileDropdown';
+import apiClient, { getCsrfToken } from '../config/api';
+import axios from 'axios';
+import { exportData } from '../utils/crossFeature/exportService';
+import toast from 'react-hot-toast';
+import SavedReportsPanel from '../components/ReportBuilder/SavedReportsPanel';
+import ReportConfiguration from '../components/ReportBuilder/ReportConfiguration';
+import ReportViewPanel from '../components/ReportBuilder/ReportViewPanel';
+import ReportsList from '../components/ReportBuilder/ReportsList';
+import PreviewModal from '../components/ReportBuilder/PreviewModal';
+import DeleteConfirmModal from '../components/ReportBuilder/DeleteConfirmModal';
+import ScheduleModal from '../components/ReportBuilder/ScheduleModal';
+import { hasPermission, PERMISSIONS, ROLES } from '../utils/rbac';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+// Custom axios instance for report generation with longer timeout
+const reportApiClient = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || '/api',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  timeout: 600000, // 10 minutes for report generation
+});
+
+// Add auth token and CSRF token to report API client
+reportApiClient.interceptors.request.use(async (config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  
+  // Add CSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
+  if (!config.url?.includes('/auth/') && ['POST', 'PUT', 'DELETE', 'PATCH'].includes(config.method?.toUpperCase())) {
+    try {
+      const csrf = await getCsrfToken();
+      if (csrf) {
+        config.headers['X-CSRF-Token'] = csrf;
+      }
+    } catch (error) {
+      console.warn('Failed to get CSRF token for report request:', error);
+    }
+  }
+  
+  return config;
+});
+
+const ReportBuilder = () => {
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  
+  // Check if user is Reports Viewer (view-only access)
+  const isReportsViewer = user?.role === ROLES.REPORTS_VIEWER;
+  const canEditReports = hasPermission(user?.role, PERMISSIONS.EDIT_REPORTS);
+  const canDeleteReports = hasPermission(user?.role, PERMISSIONS.DELETE_REPORTS);
+  const canCreateReports = hasPermission(user?.role, PERMISSIONS.CREATE_REPORTS);
+  
+  // Reports Viewer should default to Reports tab, others to Configuration
+  const [activeTab, setActiveTab] = useState(isReportsViewer ? 'reports' : 'configuration');
+  const [viewMode, setViewMode] = useState(false);
+  const [selectedReportId, setSelectedReportId] = useState(null);
+  const [reportConfig, setReportConfig] = useState({
+    name: '',
+    objectType: '',
+    fields: [],
+    filters: {},
+    groupBy: null,
+    sortBy: null,
+    sortOrder: 'ASC',
+    limit: 10000,
+    category: 'Uncategorized'
+  });
+  const [availableObjects, setAvailableObjects] = useState([]);
+  const [availableFields, setAvailableFields] = useState([]);
+  const [filterOptions, setFilterOptions] = useState({});
+  const [previewData, setPreviewData] = useState(null);
+  const [fieldLabelMap, setFieldLabelMap] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [loadingFields, setLoadingFields] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [savedReports, setSavedReports] = useState([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [reportsHistory, setReportsHistory] = useState([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleFormData, setScheduleFormData] = useState({
+    schedule: 'daily',
+    format: 'excel',
+    recipients: []
+  });
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [previewModalData, setPreviewModalData] = useState(null);
+
+  // Use refs to track if operations are in progress (refs don't cause re-renders)
+  const previewInProgressRef = useRef(false);
+  const generateInProgressRef = useRef(false);
+  
+  // Track which tabs have been loaded
+  const [loadedTabs, setLoadedTabs] = useState(new Set());
+  
+  // Load shared data (needed for both tabs) on initial mount
+  useEffect(() => {
+    loadAvailableObjects();
+    loadSavedReports();
+  }, []); // Only run once on mount
+  
+  // Load tab-specific data when tab is clicked (lazy loading)
+  useEffect(() => {
+    // Redirect Reports Viewer to Reports tab if they try to access Configuration
+    if (isReportsViewer && activeTab === 'configuration') {
+      setActiveTab('reports');
+      return;
+    }
+    
+    // Load reports history only when reports tab is active and not yet loaded
+    if (activeTab === 'reports' && !loadedTabs.has('reports')) {
+      loadReportsHistory();
+      setLoadedTabs(prev => new Set([...prev, 'reports']));
+    }
+  }, [activeTab, isReportsViewer, loadedTabs]);
+
+  useEffect(() => {
+    if (reportConfig.objectType) {
+      loadFieldsForObject(reportConfig.objectType);
+      loadFilterOptions(reportConfig.objectType);
+    } else {
+      setAvailableFields([]);
+      setFilterOptions({});
+    }
+  }, [reportConfig.objectType]);
+
+  useEffect(() => {
+    const labelMap = {};
+    availableFields.forEach(field => {
+      labelMap[field.name] = field.label || field.name;
+    });
+    // Add common field labels that might not be in availableFields (handle both naming conventions)
+    if (!labelMap['Active_Contributors__c']) {
+      labelMap['Active_Contributors__c'] = 'Active Contributors';
+    }
+    if (!labelMap['Active_Contributors_c__c']) {
+      labelMap['Active_Contributors_c__c'] = 'Active Contributors';
+    }
+    if (!labelMap['Applied_Contributors__c']) {
+      labelMap['Applied_Contributors__c'] = 'Applied Contributors';
+    }
+    if (!labelMap['Applied_Contributors_c__c']) {
+      labelMap['Applied_Contributors_c__c'] = 'Applied Contributors';
+    }
+    if (!labelMap['Qualified_Contributors__c']) {
+      labelMap['Qualified_Contributors__c'] = 'Qualified Contributors';
+    }
+    if (!labelMap['Qualified_Contributors_c__c']) {
+      labelMap['Qualified_Contributors_c__c'] = 'Qualified Contributors';
+    }
+    if (!labelMap['Removed__c']) {
+      labelMap['Removed__c'] = 'Removed';
+    }
+    if (!labelMap['Removed_c__c']) {
+      labelMap['Removed_c__c'] = 'Removed';
+    }
+    if (!labelMap['Total_Applied__c']) {
+      labelMap['Total_Applied__c'] = 'Total Applied';
+    }
+    if (!labelMap['Total_Qualified__c']) {
+      labelMap['Total_Qualified__c'] = 'Total Qualified';
+    }
+    setFieldLabelMap(labelMap);
+  }, [availableFields]);
+
+  const loadAvailableObjects = async () => {
+    try {
+      const response = await apiClient.get('/update-object-fields/objects');
+      if (response.data.success) {
+        setAvailableObjects(response.data.objects || []);
+      }
+    } catch (error) {
+      console.error('Error loading objects:', error);
+      toast.error('Failed to load available objects');
+    }
+  };
+
+  const loadFieldsForObject = async (objectType) => {
+    setLoadingFields(true);
+    try {
+      // Add forReporting=true query parameter to include read-only fields (like Total_Applied__c)
+      const response = await apiClient.get(`/update-object-fields/fields/${encodeURIComponent(objectType)}?forReporting=true`);
+      if (response.data.success) {
+        setAvailableFields(response.data.fields || []);
+      } else {
+        toast.error(response.data.error || 'Failed to load fields');
+      }
+    } catch (error) {
+      console.error('Error loading fields:', error);
+      toast.error(error.response?.data?.error || 'Failed to load fields');
+      setAvailableFields([]);
+    } finally {
+      setLoadingFields(false);
+    }
+  };
+
+  const loadFilterOptions = async (objectType) => {
+    try {
+      const response = await apiClient.get(`/update-object-fields/filter-options/${encodeURIComponent(objectType)}`);
+      if (response.data.success) {
+        setFilterOptions(response.data.filterOptions || {});
+      }
+    } catch (error) {
+      console.error('Error loading filter options:', error);
+    }
+  };
+
+  const loadSavedReports = () => {
+    try {
+      const saved = localStorage.getItem('saved_reports');
+      if (saved) {
+        setSavedReports(JSON.parse(saved));
+      }
+    } catch (error) {
+      console.error('Error loading saved reports:', error);
+    }
+  };
+
+  const loadReportsHistory = async () => {
+    setLoadingHistory(true);
+    try {
+      const [historyResponse, scheduledResponse] = await Promise.all([
+        apiClient.get('/reports/history').catch(() => ({ data: { success: true, reports: [] } })),
+        apiClient.get('/scheduled-reports').catch(() => ({ data: { success: true, reports: [] } }))
+      ]);
+
+      const manualReports = historyResponse.data.success ? (historyResponse.data.reports || []) : [];
+      const scheduledReports = scheduledResponse.data.success ? (scheduledResponse.data.reports || []).map(r => ({
+        ...r,
+        type: 'scheduled',
+        generatedAt: r.lastRunAt || r.createdAt
+      })) : [];
+
+      const allReports = [...manualReports, ...scheduledReports].sort((a, b) => {
+        const dateA = new Date(a.generatedAt || a.createdAt || 0);
+        const dateB = new Date(b.generatedAt || b.createdAt || 0);
+        return dateB - dateA;
+      });
+
+      setReportsHistory(allReports);
+    } catch (error) {
+      console.error('Error loading reports history:', error);
+      toast.error('Failed to load reports history');
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  const getCategories = () => {
+    const categories = new Set();
+    reportsHistory.forEach(report => {
+      categories.add(report.category || 'Uncategorized');
+    });
+    return Array.from(categories).sort();
+  };
+
+  const saveReport = () => {
+    if (!reportConfig.name) {
+      toast.error('Please enter a report name');
+      return;
+    }
+    if (!reportConfig.objectType) {
+      toast.error('Please select an object type');
+      return;
+    }
+    if (reportConfig.fields.length === 0) {
+      toast.error('Please select at least one field');
+      return;
+    }
+
+    try {
+      const reportToSave = {
+        ...reportConfig,
+        id: selectedReportId || `report_${Date.now()}`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        fieldLabels: fieldLabelMap // Save field labels with the report
+      };
+      
+      // Ensure filters are included (even if empty)
+      if (!reportToSave.filters) {
+        reportToSave.filters = {};
+      }
+      
+      
+      let reports;
+      if (selectedReportId) {
+        reports = savedReports.map(r => r.id === selectedReportId ? reportToSave : r);
+      } else {
+        reports = [...savedReports, reportToSave];
+      }
+      
+      localStorage.setItem('saved_reports', JSON.stringify(reports));
+      setSavedReports(reports);
+      setSelectedReportId(null);
+      toast.success('Report saved successfully');
+    } catch (error) {
+      console.error('[ReportBuilder] Error saving report:', error);
+      toast.error('Failed to save report');
+    }
+  };
+
+  const previewReport = useCallback(async (event) => {
+    // Prevent any default behavior
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Early return if already in progress
+    if (previewInProgressRef.current || generateInProgressRef.current) {
+      return;
+    }
+
+    if (!reportConfig.objectType || reportConfig.fields.length === 0) {
+      toast.error('Please select an object type and at least one field');
+      return;
+    }
+    previewInProgressRef.current = true;
+    setIsPreviewing(true);
+    // Don't set shared loading state - use isPreviewing instead
+    try {
+      const response = await reportApiClient.post('/reports/preview', {
+        objectType: reportConfig.objectType,
+        fields: reportConfig.fields,
+        filters: reportConfig.filters,
+        sortBy: reportConfig.sortBy,
+        sortOrder: reportConfig.sortOrder,
+        groupBy: reportConfig.groupBy,
+        limit: reportConfig.limit,
+        fieldLabels: fieldLabelMap
+      });
+
+      if (response.data.success) {
+        const data = response.data.records || [];
+        
+        // Merge backend field labels with frontend fieldLabelMap
+        const mergedFieldLabels = {
+          ...fieldLabelMap,
+          ...(response.data.fieldLabels || {})
+        };
+        
+        // Update fieldLabelMap with backend labels
+        if (response.data.fieldLabels) {
+          setFieldLabelMap(prev => ({
+            ...prev,
+            ...response.data.fieldLabels
+          }));
+        }
+        
+        setPreviewModalData({
+          data,
+          fieldLabels: mergedFieldLabels,
+          count: data.length,
+          totalCount: response.data.count || data.length,
+          hasMore: response.data.hasMore || false
+        });
+        setShowPreviewModal(true);
+        toast.success(`Preview: ${response.data.count || data.length} records`);
+      }
+    } catch (error) {
+      console.error('Error previewing report:', error);
+      toast.error(error.response?.data?.error || 'Failed to preview report');
+    } finally {
+      previewInProgressRef.current = false;
+      setIsPreviewing(false);
+    }
+  }, [reportConfig.objectType, reportConfig.fields, reportConfig.filters, reportConfig.sortBy, reportConfig.sortOrder, reportConfig.groupBy, reportConfig.limit, reportConfig.name, reportConfig.category, fieldLabelMap]);
+
+  const generateReport = useCallback(async (event) => {
+    // Prevent any default behavior
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
+    // Early return if already in progress
+    if (previewInProgressRef.current || generateInProgressRef.current) {
+      return;
+    }
+
+    if (!reportConfig.objectType || reportConfig.fields.length === 0) {
+      toast.error('Please select an object type and at least one field');
+      return;
+    }
+    generateInProgressRef.current = true;
+    setIsGenerating(true);
+    // Don't set shared loading state - use isGenerating instead
+    try {
+      const response = await reportApiClient.post('/reports/generate', {
+        objectType: reportConfig.objectType,
+        fields: reportConfig.fields,
+        filters: reportConfig.filters,
+        sortBy: reportConfig.sortBy,
+        sortOrder: reportConfig.sortOrder,
+        groupBy: reportConfig.groupBy,
+        limit: reportConfig.limit,
+        reportName: reportConfig.name || `Report ${new Date().toLocaleString()}`,
+        category: reportConfig.category || 'Uncategorized',
+        fieldLabels: fieldLabelMap
+      });
+
+      if (response.data.success) {
+        const data = response.data.records || [];
+        setPreviewData(data);
+        setFieldLabelMap(response.data.fieldLabels || fieldLabelMap);
+        setShowPreview(true);
+        setViewMode(true); // Switch to report view to show the generated report
+        toast.success(`Generated and saved ${response.data.count || data.length} records`);
+        if (activeTab === 'reports') {
+          loadReportsHistory();
+        }
+        setActiveTab('configuration'); // Keep on configuration tab but show report view
+      }
+    } catch (error) {
+      console.error('Error generating report:', error);
+      toast.error(error.response?.data?.error || 'Failed to generate report');
+    } finally {
+      generateInProgressRef.current = false;
+      setIsGenerating(false);
+    }
+  }, [reportConfig.objectType, reportConfig.fields, reportConfig.filters, reportConfig.sortBy, reportConfig.sortOrder, reportConfig.limit, reportConfig.name, reportConfig.category, fieldLabelMap, activeTab]);
+
+  const exportReport = () => {
+    if (!previewData || previewData.length === 0) {
+      toast.error('No data to export. Please generate a report first.');
+      return;
+    }
+
+    const exportDataWithLabels = previewData.map(row => {
+      const mappedRow = {};
+      Object.keys(row).forEach(key => {
+        const label = fieldLabelMap[key] || key;
+        mappedRow[label] = row[key];
+      });
+      return mappedRow;
+    });
+
+    const result = exportData(exportDataWithLabels, reportConfig.name || 'report', reportConfig.format);
+    if (result.success) {
+      toast.success(`Exported to ${result.filename}`);
+    } else {
+      toast.error(result.error || 'Export failed');
+    }
+  };
+
+  const addField = (fieldName) => {
+    if (!reportConfig.fields.includes(fieldName)) {
+      setReportConfig({
+        ...reportConfig,
+        fields: [...reportConfig.fields, fieldName]
+      });
+    }
+  };
+
+  const removeField = (fieldName) => {
+    setReportConfig({
+      ...reportConfig,
+      fields: reportConfig.fields.filter(f => f !== fieldName)
+    });
+  };
+
+  const handleFieldToggle = (fieldName) => {
+    if (reportConfig.fields.includes(fieldName)) {
+      removeField(fieldName);
+    } else {
+      addField(fieldName);
+    }
+  };
+
+  const updateFilter = (field, value) => {
+    setReportConfig({
+      ...reportConfig,
+      filters: {
+        ...reportConfig.filters,
+        [field]: value
+      }
+    });
+  };
+
+  const loadSavedReport = (report) => {
+    setReportConfig({
+      name: report.name || '',
+      objectType: report.objectType || '',
+      fields: report.fields || [],
+      filters: report.filters || {},
+      groupBy: report.groupBy || null,
+      sortBy: report.sortBy || null,
+      sortOrder: report.sortOrder || 'ASC',
+      format: report.format || 'excel',
+      limit: report.limit || 10000,
+      category: report.category || 'Uncategorized'
+    });
+    // Load field labels if available
+    if (report.fieldLabels) {
+      setFieldLabelMap(report.fieldLabels);
+    }
+    setSelectedReportId(report.id);
+    setShowPreview(false);
+    setPreviewData(null);
+    setViewMode(false);
+    setActiveTab('configuration');
+  };
+
+  const createNewReport = () => {
+    setReportConfig({
+      name: '',
+      objectType: '',
+      fields: [],
+      filters: {},
+      groupBy: null,
+      sortBy: null,
+      sortOrder: 'ASC',
+      format: 'excel',
+      limit: 10000,
+      category: 'Uncategorized'
+    });
+    setSelectedReportId(null);
+    setShowPreview(false);
+    setPreviewData(null);
+    setViewMode(false);
+  };
+
+  const handleScheduleReport = () => {
+    if (!reportConfig.name || !reportConfig.objectType || reportConfig.fields.length === 0) {
+      toast.error('Please complete the report configuration first');
+      return;
+    }
+    setScheduleFormData({
+      scheduleType: 'recurring',
+      schedule: 'daily',
+      format: 'excel',
+      runTime: '09:00',
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      enabled: true,
+      emailConfig: {
+        recipients: [],
+        subject: `Report: ${reportConfig.name || 'Untitled'}`,
+        body: '',
+        attachFile: true,
+        includeLink: false,
+        embedData: false,
+        deliveryMethod: 'email',
+        cloudStorage: 'none'
+      }
+    });
+    setShowScheduleModal(true);
+  };
+
+  const handleCreateScheduledReport = async (finalScheduleData) => {
+    try {
+      const scheduleData = finalScheduleData || scheduleFormData;
+      const response = await apiClient.post('/scheduled-reports', {
+        name: reportConfig.name,
+        objectType: reportConfig.objectType,
+        fields: reportConfig.fields,
+        filters: reportConfig.filters,
+        scheduleType: scheduleData.scheduleType || 'recurring',
+        schedule: scheduleData.schedule || 'daily',
+        runTime: scheduleData.runTime || '09:00',
+        timezone: scheduleData.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,
+        dayOfWeek: scheduleData.dayOfWeek,
+        dayOfMonth: scheduleData.dayOfMonth,
+        cronExpression: scheduleData.cronExpression,
+        runDate: scheduleData.runDate,
+        format: scheduleData.format || reportConfig.format || 'excel',
+        emailConfig: scheduleData.emailConfig,
+        enabled: scheduleData.enabled !== false,
+        limit: reportConfig.limit
+      });
+
+      if (response.data.success) {
+        toast.success('Scheduled report created successfully');
+        setShowScheduleModal(false);
+        if (activeTab === 'reports') {
+          loadReportsHistory();
+        }
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Failed to create scheduled report');
+    }
+  };
+
+  const handleDeleteReport = (reportId) => {
+    setReportToDelete(reportId);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteSavedReport = (reportId) => {
+    setReportToDelete(reportId);
+    setShowDeleteConfirm(true);
+  };
+
+  const confirmDeleteReport = async () => {
+    if (!reportToDelete) return;
+    
+    // Check if it's a saved report (starts with "report_") or a history report
+    const isSavedReport = savedReports.some(r => r.id === reportToDelete);
+    
+    if (isSavedReport) {
+      // Delete from saved reports
+      try {
+        const updatedReports = savedReports.filter(r => r.id !== reportToDelete);
+        localStorage.setItem('saved_reports', JSON.stringify(updatedReports));
+        setSavedReports(updatedReports);
+        if (selectedReportId === reportToDelete) {
+          setSelectedReportId(null);
+          createNewReport();
+        }
+        toast.success('Saved report deleted');
+      } catch (error) {
+        toast.error('Failed to delete saved report');
+      }
+    } else {
+      // Delete from history
+      try {
+        const response = await apiClient.delete(`/reports/history/${reportToDelete}`);
+        if (response.data.success) {
+          toast.success('Report deleted');
+          loadReportsHistory();
+        }
+      } catch (error) {
+        toast.error('Failed to delete report');
+      }
+    }
+    
+    setShowDeleteConfirm(false);
+    setReportToDelete(null);
+  };
+
+  const handleViewReport = async (reportId) => {
+    try {
+      const response = await apiClient.get(`/reports/history/${reportId}`);
+      if (response.data.success) {
+        const report = response.data.report;
+        setPreviewData(report.data || []);
+        setFieldLabelMap(report.fieldLabels || {});
+        setReportConfig({
+          name: report.name || '',
+          objectType: report.objectType || '',
+          fields: report.fields || [],
+          filters: report.filters || {},
+          category: report.category || 'Uncategorized'
+        });
+        setShowPreview(true);
+        setViewMode(true);
+        setSelectedReportId(reportId);
+        // For Reports Viewer, stay on reports tab; for others, switch to configuration
+        if (!isReportsViewer) {
+          setActiveTab('configuration');
+        }
+      }
+    } catch (error) {
+      toast.error('Failed to load report');
+    }
+  };
+
+  const handleEditReport = async (reportId) => {
+    try {
+      const response = await apiClient.get(`/reports/history/${reportId}`);
+      if (response.data.success) {
+        const report = response.data.report;
+        setReportConfig({
+          name: report.name || '',
+          objectType: report.objectType || '',
+          fields: report.fields || [],
+          filters: report.filters || {},
+          sortBy: report.sortBy || null,
+          sortOrder: report.sortOrder || 'ASC',
+          format: report.format || 'excel',
+          limit: report.limit || 10000,
+          category: report.category || 'Uncategorized'
+        });
+        setSelectedReportId(report.id);
+        setShowPreview(false);
+        setPreviewData(null);
+        setViewMode(false);
+        setActiveTab('configuration');
+      }
+    } catch (error) {
+      toast.error('Failed to load report');
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      
+      <div style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease', transition: 'margin-left 0.3s ease', width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 80px)' }}>
+        <header className="dashboard-header">
+          <div className="header-content">
+            <div className="header-left">
+              <button 
+                className="header-menu-toggle"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                aria-label="Toggle sidebar"
+              >
+                <Menu size={20} />
+              </button>
+              <div>
+                <h1 className="page-title">Report Builder</h1>
+                <p className="page-subtitle">Create custom reports from Salesforce data</p>
+              </div>
+            </div>
+            <div className="header-user-profile">
+              <UserProfileDropdown />
+            </div>
+          </div>
+        </header>
+
+        <main style={{ padding: '24px', background: '#f5f5f5', minHeight: 'calc(100vh - 80px)' }}>
+          {/* Tabs */}
+          <div style={{ marginBottom: '24px', borderBottom: '2px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', gap: '0' }}>
+              {!isReportsViewer && (
+                <button
+                  onClick={() => {
+                    setActiveTab('configuration');
+                    setViewMode(false);
+                  }}
+                  style={{
+                    padding: '12px 24px',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTab === 'configuration' ? '2px solid #08979C' : '2px solid transparent',
+                    color: activeTab === 'configuration' ? '#08979C' : '#666',
+                    fontWeight: activeTab === 'configuration' ? '600' : '400',
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    marginBottom: '-2px'
+                  }}
+                >
+                  Report Configuration
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setActiveTab('reports');
+                  loadReportsHistory();
+                }}
+                style={{
+                  padding: '12px 24px',
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: activeTab === 'reports' ? '2px solid #08979C' : '2px solid transparent',
+                  color: activeTab === 'reports' ? '#08979C' : '#666',
+                  fontWeight: activeTab === 'reports' ? '600' : '400',
+                  cursor: 'pointer',
+                  fontSize: '14px',
+                  marginBottom: '-2px'
+                }}
+              >
+                Reports
+              </button>
+            </div>
+          </div>
+
+          {activeTab === 'configuration' ? (
+            <div style={{ background: '#fff', borderRadius: '8px', padding: '24px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+              {showPreview && previewData && viewMode ? (
+                // Full width Report View
+                <ReportViewPanel
+                  previewData={previewData}
+                  fieldLabelMap={fieldLabelMap}
+                  reportName={reportConfig.name}
+                  totalCount={previewData.length}
+                  hasMore={false}
+                  onEdit={canEditReports ? () => {
+                    setViewMode(false);
+                    handleEditReport(selectedReportId);
+                  } : null}
+                  canEdit={canEditReports}
+                  onClose={() => {
+                    setShowPreview(false);
+                    setViewMode(false);
+                    setPreviewData(null);
+                    setActiveTab('reports');
+                    loadReportsHistory();
+                  }}
+                />
+              ) : (
+                // Normal configuration view with left panel
+                <div style={{ display: 'flex', gap: '24px' }}>
+                  <SavedReportsPanel
+                    savedReports={savedReports}
+                    selectedReportId={selectedReportId}
+                    onSelectReport={loadSavedReport}
+                    onCreateNew={createNewReport}
+                    onDeleteReport={handleDeleteSavedReport}
+                  />
+                  <div style={{ flex: 1 }}>
+                    <ReportConfiguration
+                      reportConfig={reportConfig}
+                      setReportConfig={setReportConfig}
+                      availableObjects={availableObjects}
+                      availableFields={availableFields}
+                      filterOptions={filterOptions}
+                      loadingFields={loadingFields}
+                      loading={loading}
+                      isPreviewing={isPreviewing}
+                      isGenerating={isGenerating}
+                      previewData={previewData}
+                      viewMode={viewMode}
+                      onSave={saveReport}
+                      onPreview={previewReport}
+                      onGenerate={generateReport}
+                      onSchedule={handleScheduleReport}
+                      onFieldToggle={handleFieldToggle}
+                      onFilterChange={updateFilter}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <>
+              {showPreview && previewData && viewMode ? (
+                // Show report view in Reports tab for Reports Viewer
+                <div style={{ background: '#fff', borderRadius: '8px', padding: '24px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  <ReportViewPanel
+                    previewData={previewData}
+                    fieldLabelMap={fieldLabelMap}
+                    reportName={reportConfig.name}
+                    totalCount={previewData.length}
+                    hasMore={false}
+                    onEdit={canEditReports ? () => {
+                      setViewMode(false);
+                      handleEditReport(selectedReportId);
+                    } : null}
+                    canEdit={canEditReports}
+                    onClose={() => {
+                      setShowPreview(false);
+                      setViewMode(false);
+                      setPreviewData(null);
+                      setSelectedReportId(null);
+                    }}
+                  />
+                </div>
+              ) : (
+                <ReportsList
+                  reportsHistory={reportsHistory}
+                  loadingHistory={loadingHistory}
+                  selectedCategory={selectedCategory}
+                  categories={getCategories()}
+                  onCategoryChange={setSelectedCategory}
+                  onRefresh={loadReportsHistory}
+                  onView={handleViewReport}
+                  onEdit={canEditReports ? handleEditReport : null}
+                  onDelete={canDeleteReports ? handleDeleteReport : null}
+                  canEdit={canEditReports}
+                  canDelete={canDeleteReports}
+                />
+              )}
+            </>
+          )}
+
+          {/* Modals */}
+          <PreviewModal
+            show={showPreviewModal}
+            data={previewModalData?.data}
+            fieldLabels={previewModalData?.fieldLabels || fieldLabelMap || {}}
+            totalCount={previewModalData?.totalCount}
+            hasMore={previewModalData?.hasMore}
+            onClose={() => setShowPreviewModal(false)}
+          />
+
+          <DeleteConfirmModal
+            show={showDeleteConfirm}
+            onConfirm={confirmDeleteReport}
+            onCancel={() => {
+              setShowDeleteConfirm(false);
+              setReportToDelete(null);
+            }}
+          />
+
+          <ScheduleModal
+            show={showScheduleModal}
+            formData={scheduleFormData}
+            onClose={() => setShowScheduleModal(false)}
+            onSave={handleCreateScheduledReport}
+            onChange={setScheduleFormData}
+            reportName={reportConfig.name}
+          />
+        </main>
+      </div>
+    </div>
+  );
+};
+
+export default ReportBuilder;

@@ -1,0 +1,576 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import { getErrorMessage, handleError } from '../utils/errorHandler';
+import { sanitizeObject } from '../utils/security';
+import { Search, Menu, Send, Plus, X } from 'lucide-react';
+import UserProfileDropdown from '../components/UserProfileDropdown/UserProfileDropdown';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import '../styles/ProjectSetup.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+const ProjectTeamSetup = () => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [submitting, setSubmitting] = useState(false);
+  
+  // Project search states
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectSearchTerm, setProjectSearchTerm] = useState('');
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  
+  // Team member states
+  const [teamMembers, setTeamMembers] = useState([{ member: '', memberId: '', role: '' }]);
+  const [teamMemberSearchResults, setTeamMemberSearchResults] = useState({});
+  const [loadingTeamMemberSearch, setLoadingTeamMemberSearch] = useState({});
+  const teamMemberSearchTimeoutRefs = useRef({});
+  const [fieldErrors, setFieldErrors] = useState({});
+
+  const TEAM_MEMBER_ROLES = [
+    '--None--',
+    'Invoicing Lead',
+    'Onboarding Lead',
+    'Program Manager',
+    'Project Manager',
+    'Project Support Lead',
+    'Recruitment Lead',
+    'Reporting Writer',
+    'Tech Lead',
+    'Project Lead',
+    'Project Team',
+    'Productivity Lead'
+  ];
+
+  // Search projects in Salesforce when search term changes
+  useEffect(() => {
+    const searchProjects = async () => {
+      if (!projectSearchTerm || projectSearchTerm.trim() === '') {
+        setProjects([]);
+        return;
+      }
+
+      // Don't search if the search term matches the selected project
+      if (selectedProject && projectSearchTerm === selectedProject) {
+        setProjects([]);
+        setShowProjectDropdown(false);
+        return;
+      }
+
+      setLoadingProjects(true);
+      try {
+        const response = await apiClient.get(`/salesforce/search-projects?search=${encodeURIComponent(projectSearchTerm)}`);
+        if (response.data.success) {
+          setProjects(response.data.projects || []);
+          setShowProjectDropdown(true);
+        }
+      } catch (error) {
+        handleError(error, 'ProjectTeamSetup - searchProjects');
+        setProjects([]);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    // Debounce search - wait 300ms after user stops typing
+    const timeoutId = setTimeout(() => {
+      searchProjects();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [projectSearchTerm, selectedProject]);
+
+  const handleProjectSelect = (projectName) => {
+    setSelectedProject(projectName);
+    setValue('project', projectName);
+    setProjectSearchTerm(projectName);
+    setShowProjectDropdown(false);
+    setProjects([]);
+  };
+
+  const searchTeamMember = async (searchTerm, index) => {
+    if (!searchTerm || searchTerm.trim().length < 3) {
+      setTeamMemberSearchResults(prev => ({ ...prev, [index]: [] }));
+      return;
+    }
+
+    setLoadingTeamMemberSearch(prev => ({ ...prev, [index]: true }));
+    try {
+      const response = await apiClient.get(`/salesforce/search-people?search=${encodeURIComponent(searchTerm)}`);
+      if (response.data.success) {
+        const people = response.data.people || [];
+        setTeamMemberSearchResults(prev => ({ ...prev, [index]: people }));
+      } else {
+        setTeamMemberSearchResults(prev => ({ ...prev, [index]: [] }));
+      }
+    } catch (error) {
+      handleError(error, 'ProjectTeamSetup - searchTeamMember');
+      setTeamMemberSearchResults(prev => ({ ...prev, [index]: [] }));
+    } finally {
+      setLoadingTeamMemberSearch(prev => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const handleTeamMemberChange = (index, value) => {
+    const updated = [...teamMembers];
+    updated[index] = { ...updated[index], member: value, memberId: '' };
+    setTeamMembers(updated);
+
+    // Clear errors for this field
+    if (fieldErrors[`teamMember_${index}`]) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[`teamMember_${index}`];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleTeamMemberSelect = (index, person) => {
+    const updated = [...teamMembers];
+    updated[index] = { ...updated[index], member: person.name || person.email, memberId: person.id };
+    setTeamMembers(updated);
+    setTeamMemberSearchResults(prev => ({ ...prev, [index]: [] }));
+  };
+
+  const handleRoleChange = (index, role) => {
+    const updated = [...teamMembers];
+    updated[index] = { ...updated[index], role };
+    setTeamMembers(updated);
+
+    // Clear errors for this field
+    if (fieldErrors[`teamMemberRole_${index}`]) {
+      setFieldErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[`teamMemberRole_${index}`];
+        return newErrors;
+      });
+    }
+  };
+
+  const addTeamMember = () => {
+    setTeamMembers([...teamMembers, { member: '', memberId: '', role: '' }]);
+  };
+
+  const removeTeamMember = (index) => {
+    if (teamMembers.length > 1) {
+      const updated = teamMembers.filter((_, i) => i !== index);
+      setTeamMembers(updated);
+    }
+  };
+
+  const handlePublish = async () => {
+    // Validate project is selected
+    if (!selectedProject || !projectSearchTerm || projectSearchTerm.trim() === '') {
+      toast.error('Please select a project');
+      setFieldErrors(prev => ({ ...prev, project: 'Project is required' }));
+      return;
+    }
+
+    // Validate team members
+    const validTeamMembers = teamMembers.filter(tm => 
+      tm && 
+      tm.member && tm.member.trim() !== '' && 
+      tm.memberId && tm.memberId.trim() !== '' &&
+      tm.role && tm.role !== '--None--'
+    );
+
+    if (validTeamMembers.length === 0) {
+      toast.error('Please add at least one team member with a valid role');
+      setFieldErrors(prev => ({ ...prev, teamMembers: 'At least one team member is required' }));
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const teamMemberData = {
+        project: selectedProject,
+        teamMembers: validTeamMembers.map(tm => ({
+          member: tm.member.trim(),
+          memberId: tm.memberId.trim(),
+          role: tm.role
+        }))
+      };
+
+      // Publishing team members to project
+
+      // Sanitize data before sending to server
+      const sanitizedData = sanitizeObject(teamMemberData);
+      
+      const response = await apiClient.post('/salesforce/create-project-team', sanitizedData, {
+        timeout: 300000
+      });
+
+      if (response.data.success) {
+        const created = response.data.teamMembers?.filter(tm => tm.status === 'created').length || 0;
+        const errors = response.data.teamMembers?.filter(tm => tm.status === 'error').length || 0;
+        const skipped = response.data.teamMembers?.filter(tm => tm.status === 'skipped').length || 0;
+
+        if (created > 0) {
+          toast.success(`${created} team member(s) published successfully to project "${selectedProject}"`);
+        }
+        if (errors > 0) {
+          const errorMessages = response.data.teamMembers
+            .filter(tm => tm.status === 'error')
+            .map(tm => `${tm.member}: ${tm.error || 'Unknown error'}`)
+            .join('; ');
+          toast.error(`${errors} team member(s) failed: ${errorMessages}`);
+        }
+        if (skipped > 0) {
+          const skipReasons = response.data.teamMembers
+            .filter(tm => tm.status === 'skipped')
+            .map(tm => `${tm.member}: ${tm.reason || tm.error || 'Skipped'}`)
+            .join('; ');
+          toast(`${skipped} team member(s) skipped: ${skipReasons}`, { icon: '⚠️' });
+        }
+
+        // Clear form after successful publish
+        setTimeout(() => {
+          setTeamMembers([{ member: '', memberId: '', role: '' }]);
+          setSelectedProject(null);
+          setProjectSearchTerm('');
+          setValue('project', '');
+        }, 2000);
+      } else {
+        toast.error('Failed to publish team members: ' + getErrorMessage(response.data));
+      }
+    } catch (error) {
+      const errorMessage = handleError(error, 'ProjectTeamSetup - publishTeamMembers');
+      toast.error(`Failed to publish team members: ${errorMessage}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <div className="project-setup" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease' }}>
+        <div className="setup-container">
+          <div className="setup-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">Create Project Team</h1>
+                  <p className="page-subtitle">Add team members to an existing project</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <UserProfileDropdown />
+              </div>
+            </div>
+          </div>
+          <div className="section-content">
+            <h2 style={{ marginBottom: '20px', color: '#1e293b', fontSize: '18px', fontWeight: '600' }}>
+              Project Information
+            </h2>
+            <div className="form-grid">
+              <div className="form-group full-width" style={{ position: 'relative' }}>
+                <label>
+                  * Project
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    type="text"
+                    {...register('project', { required: true })}
+                    className={fieldErrors.project ? 'error-field' : ''}
+                    placeholder="Search or enter project name..."
+                    style={{ fontSize: '13px', padding: '8px', paddingRight: '40px', width: '100%' }}
+                    value={projectSearchTerm}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setProjectSearchTerm(value);
+                      setValue('project', value);
+                      if (value !== selectedProject) {
+                        setShowProjectDropdown(true);
+                      } else {
+                        setShowProjectDropdown(false);
+                        setProjects([]);
+                      }
+                    }}
+                    onFocus={() => {
+                      if (projectSearchTerm && projects.length > 0) {
+                        setShowProjectDropdown(true);
+                      }
+                    }}
+                    onBlur={() => {
+                      setTimeout(() => setShowProjectDropdown(false), 200);
+                    }}
+                  />
+                  <Search size={16} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                  {showProjectDropdown && projects.length > 0 && (
+                    <div style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      backgroundColor: 'white',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      maxHeight: '200px',
+                      overflowY: 'auto',
+                      zIndex: 1000,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                      marginTop: '4px'
+                    }}>
+                      {loadingProjects ? (
+                        <div style={{ padding: '8px', fontSize: '13px', color: '#666', textAlign: 'center' }}>Searching...</div>
+                      ) : projects.map(project => (
+                        <div
+                          key={project.id}
+                          onClick={() => handleProjectSelect(project.name)}
+                          style={{
+                            padding: '8px 12px',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            borderBottom: '1px solid #f0f0f0'
+                          }}
+                          onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                          onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                        >
+                          <div style={{ fontWeight: '500' }}>{project.name}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {fieldErrors.project && (
+                  <span className="error">Project is required</span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="section-content" style={{ marginTop: '32px' }}>
+            <h2 style={{ marginBottom: '20px', color: '#1e293b', fontSize: '18px', fontWeight: '600' }}>
+              Project Team
+            </h2>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              {teamMembers.map((tm, index) => (
+                <div 
+                  key={index} 
+                  style={{ 
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 120px',
+                    gap: '24px',
+                    alignItems: 'end'
+                  }}
+                >
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>
+                      * Team Member
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        value={tm.member}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          handleTeamMemberChange(index, value);
+
+                          // Clear previous timeout for this index
+                          if (teamMemberSearchTimeoutRefs.current[index]) {
+                            clearTimeout(teamMemberSearchTimeoutRefs.current[index]);
+                          }
+
+                          // Clear results if search term is too short
+                          if (!value || value.trim().length < 3) {
+                            setTeamMemberSearchResults(prev => ({ ...prev, [index]: [] }));
+                            return;
+                          }
+
+                          // Debounce search - wait 800ms after user stops typing
+                          teamMemberSearchTimeoutRefs.current[index] = setTimeout(() => {
+                            searchTeamMember(value.trim(), index);
+                          }, 800);
+                        }}
+                        onFocus={() => {
+                          // Show dropdown if there are existing results
+                          if (teamMemberSearchResults[index] && teamMemberSearchResults[index].length > 0) {
+                            // Dropdown will show automatically
+                          } else if (tm.member && tm.member.trim().length >= 3) {
+                            // If there's a search term but no results, search again
+                            searchTeamMember(tm.member.trim(), index);
+                          }
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => {
+                            setTeamMemberSearchResults(prev => ({ ...prev, [index]: [] }));
+                          }, 200);
+                        }}
+                        placeholder="Search People..."
+                        className={fieldErrors[`teamMember_${index}`] || fieldErrors.teamMembers ? 'error-field' : ''}
+                      />
+                      <Search size={16} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                      {(teamMemberSearchResults[index] && teamMemberSearchResults[index].length > 0) || loadingTeamMemberSearch[index] ? (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          backgroundColor: '#ffffff',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '4px',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          zIndex: 1000,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          marginTop: '4px'
+                        }}>
+                          {loadingTeamMemberSearch[index] ? (
+                            <div style={{ padding: '10px', fontSize: '14px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>Searching...</div>
+                          ) : teamMemberSearchResults[index] && teamMemberSearchResults[index].length > 0 ? (
+                            teamMemberSearchResults[index].map(person => (
+                              <div
+                                key={person.id}
+                                onClick={() => handleTeamMemberSelect(index, person)}
+                                style={{
+                                  padding: '10px 12px',
+                                  cursor: 'pointer',
+                                  fontSize: '14px',
+                                  borderBottom: '1px solid #f3f4f6',
+                                  color: '#000000',
+                                  backgroundColor: '#ffffff'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#f9fafb';
+                                  e.currentTarget.style.color = '#000000';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#ffffff';
+                                  e.currentTarget.style.color = '#000000';
+                                }}
+                              >
+                                <div style={{ fontWeight: '500', color: '#000000' }}>{person.name}</div>
+                                {person.email && (
+                                  <div style={{ fontSize: '13px', color: '#374151', marginTop: '2px' }}>{person.email}</div>
+                                )}
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ padding: '10px', fontSize: '14px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>No results found</div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                    {(fieldErrors[`teamMember_${index}`] || fieldErrors.teamMembers) && (
+                      <span className="error">Complete this field.</span>
+                    )}
+                  </div>
+                  <div className="form-group">
+                    <label>
+                      * Team Member Role
+                    </label>
+                    <select
+                      value={tm.role || '--None--'}
+                      onChange={(e) => handleRoleChange(index, e.target.value)}
+                      className={fieldErrors[`teamMemberRole_${index}`] ? 'error-field' : ''}
+                    >
+                      {TEAM_MEMBER_ROLES.map(role => (
+                        <option key={role} value={role}>{role}</option>
+                      ))}
+                    </select>
+                    {fieldErrors[`teamMemberRole_${index}`] && (
+                      <span className="error">Complete this field.</span>
+                    )}
+                  </div>
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-start', gap: '8px', paddingTop: '0' }}>
+                    {index > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => removeTeamMember(index)}
+                        title={`Remove team member ${index + 1}`}
+                        style={{
+                          padding: '8px 12px',
+                          backgroundColor: '#fff',
+                          color: '#ff4d4f',
+                          border: '1px solid #ff4d4f',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          fontFamily: 'Poppins',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          whiteSpace: 'nowrap',
+                          height: 'fit-content',
+                          marginTop: '0'
+                        }}
+                      >
+                        <X size={16} />
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              <div style={{ marginTop: '8px' }}>
+                <button
+                  type="button"
+                  onClick={addTeamMember}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: '#f0f0f0',
+                    border: '1px solid #ddd',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontFamily: 'Poppins',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  <Plus size={16} />
+                  Add Team Member
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="setup-actions" style={{ marginTop: '32px', paddingTop: '20px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              onClick={() => navigate('/dashboard')}
+              className="btn-secondary"
+              disabled={submitting}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handlePublish}
+              className="btn-primary"
+              disabled={submitting || !selectedProject}
+              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              <Send size={16} />
+              {submitting ? 'Publishing...' : 'Publish'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ProjectTeamSetup;
+

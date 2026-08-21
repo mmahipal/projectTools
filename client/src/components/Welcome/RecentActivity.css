@@ -1,0 +1,132 @@
+.recent-activity-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.view-all-link {
+  background: none;
+  border: none;
+  color: #08979C;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  transition: all 0.2s ease;
+  font-family: Poppins, sans-serif;
+}
+
+.view-all-link:hover {
+  background: rgba(8, 151, 156, 0.1);
+  color: #067a7e;
+}
+
+.activity-loading,
+.activity-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.activity-item {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.activity-item.clickable {
+  cursor: pointer;
+}
+
+.activity-item.clickable:hover {
+  background: var(--bg-tertiary);
+  transform: translateX(4px);
+}
+
+.activity-icon-wrapper {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  padding-top: 2px;
+}
+
+.activity-icon {
+  flex-shrink: 0;
+}
+
+.activity-icon.activity-success {
+  color: #10b981;
+}
+
+.activity-icon.activity-create {
+  color: #3b82f6;
+}
+
+.activity-icon.activity-update {
+  color: #8b5cf6;
+}
+
+.activity-icon.activity-error {
+  color: #ef4444;
+}
+
+.activity-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.activity-description {
+  font-size: 14px;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.activity-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.activity-user {
+  font-weight: 500;
+}
+
+.activity-separator {
+  opacity: 0.5;
+}
+
+.activity-time {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+

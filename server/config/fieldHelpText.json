@@ -1,0 +1,34 @@
+{
+  "Project__c": {
+    "Auditor_Project__c": "Indicates if this is an auditor project. Auditor projects have special handling and reporting requirements.",
+    "Name": "The official project name as it appears in Salesforce. This is the primary identifier for the project.",
+    "Short_Project_Name__c": "A shortened version of the project name used for display in compact views and reports.",
+    "Contributor_Project_Name__c": "The name of the project as it appears to contributors. This may differ from the internal project name.",
+    "Appen_Partner__c": "The Appen partner organization associated with this project (e.g., Appen, Appen China).",
+    "Job_Category__c": "The category classification for this job/project (e.g., Computer Sciences, Healthcare, Legal).",
+    "Project_Short_Description__c": "A brief description of the project (typically 1-2 sentences) used in summaries and listings.",
+    "Project_Long_Description__c": "A detailed description of the project including objectives, requirements, and scope.",
+    "Project_Type__c": "The type of project (e.g., Data collection, Translation, Transcription, Search Evaluation).",
+    "Project_Priority__c": "A numeric priority value for the project. Higher numbers indicate higher priority.",
+    "Workday_Project_ID__c": "The corresponding project ID in the Workday system for integration purposes.",
+    "Project_Page__c": "The project page identifier or URL associated with this project."
+  },
+  "Project_Objective__c": {
+    "Contributor_Facing_Project_Name__c": "The name of the project as displayed to contributors for this objective.",
+    "Project_Objective_Name__c": "The official name of the project objective. This is the primary identifier.",
+    "Append_to_Objective_Name__c": "Additional text to append to the objective name for display purposes."
+  },
+  "Qualification_Step__c": {
+    "Name": "The name of the qualification step.",
+    "Description__c": "A detailed description of what this qualification step entails."
+  },
+  "Project_Page__c": {
+    "Name": "The name of the project page.",
+    "Description__c": "A description of the project page content and purpose."
+  },
+  "Project_Workstream__c": {
+    "Delivery_Tool_Name__c": "The name of the delivery tool used for this workstream (e.g., A9, ADAP, Appen Collect).",
+    "Client_Workstream_Identifier__c": "The unique identifier for this workstream in the client's system.",
+    "Functionality__c": "The type of functionality this workstream provides (e.g., System Access, Productivity)."
+  }
+}

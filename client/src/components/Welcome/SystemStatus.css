@@ -1,0 +1,139 @@
+.system-status-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  height: 100%;
+}
+
+.card-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 16px 0;
+  letter-spacing: -0.01em;
+}
+
+.status-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.status-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+  gap: 16px;
+  min-width: 0;
+}
+
+.status-item:hover {
+  background: var(--bg-tertiary);
+}
+
+.status-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 60%; /* Limit header width to prevent overlap */
+  overflow: hidden;
+}
+
+.status-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+.status-icon.status-ok {
+  color: #10b981;
+}
+
+.status-icon.status-warning {
+  color: #f59e0b;
+}
+
+.status-icon.status-error {
+  color: #ef4444;
+}
+
+.status-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.status-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.status-text.status-connected,
+.status-text.status-healthy,
+.status-text.status-operational,
+.status-text.status-running,
+.status-text.status-configured {
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.status-text.status-not_configured,
+.status-text.status-not_run {
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.status-text.status-unknown,
+.status-text.status-error {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.status-meta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+

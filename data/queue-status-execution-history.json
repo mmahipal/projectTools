@@ -1,0 +1,168 @@
+[
+  {
+    "id": "exec-1768895907714-4lyr6r11d",
+    "executionTime": "2026-01-20T07:58:27.592Z",
+    "duration": 122,
+    "rulesExecuted": 1,
+    "rulesProcessed": 0,
+    "rulesUpdated": 0,
+    "errors": [
+      {
+        "error": "User ID is required when settings are not provided. Each user must use their own Salesforce credentials."
+      }
+    ],
+    "executedRules": [],
+    "triggeredBy": "automatic_scheduler"
+  },
+  {
+    "id": "exec-1768895907697-borr6lg84",
+    "executionTime": "2026-01-20T07:58:27.649Z",
+    "duration": 48,
+    "rulesExecuted": 0,
+    "rulesProcessed": 0,
+    "rulesUpdated": 0,
+    "errors": [
+      {
+        "error": "User ID is required when settings are not provided. Each user must use their own Salesforce credentials."
+      }
+    ],
+    "executedRules": [],
+    "triggeredBy": "automatic_scheduler"
+  },
+  {
+    "id": "exec-1768895297119-0a8if4tf7",
+    "executionTime": "2026-01-20T07:48:17.025Z",
+    "duration": 94,
+    "rulesExecuted": 1,
+    "rulesProcessed": 0,
+    "rulesUpdated": 0,
+    "errors": [
+      {
+        "error": "User ID is required when settings are not provided. Each user must use their own Salesforce credentials."
+      }
+    ],
+    "executedRules": [],
+    "triggeredBy": "automatic_scheduler"
+  },
+  {
+    "id": "exec-1768895297112-qduwpaa7c",
+    "executionTime": "2026-01-20T07:48:17.095Z",
+    "duration": 16,
+    "rulesExecuted": 0,
+    "rulesProcessed": 0,
+    "rulesUpdated": 0,
+    "errors": [
+      {
+        "error": "User ID is required when settings are not provided. Each user must use their own Salesforce credentials."
+      }
+    ],
+    "executedRules": [],
+    "triggeredBy": "automatic_scheduler"
+  },
+  {
+    "id": "exec-1768893469537-xs7zz1xfw",
+    "executionTime": "2026-01-20T07:17:49.315Z",
+    "duration": 222,
+    "rulesExecuted": 1,
+    "rulesProcessed": 0,
+    "rulesUpdated": 0,
+    "errors": [
+      {
+        "error": "User ID is required when settings are not provided. Each user must use their own Salesforce credentials."
+      }
+    ],
+    "executedRules": [],
+    "triggeredBy": "automatic_scheduler"
+  },
+  {
+    "id": "exec-1768893469473-4a17btrl4",
+    "executionTime": "2026-01-20T07:17:49.391Z",
+    "duration": 82,
+    "rulesExecuted": 0,
+    "rulesProcessed": 0,
+    "rulesUpdated": 0,
+    "errors": [
+      {
+        "error": "User ID is required when settings are not provided. Each user must use their own Salesforce credentials."
+      }
+    ],
+    "executedRules": [],
+    "triggeredBy": "automatic_scheduler"
+  },
+  {
+    "id": "exec-1764847835953-vrbgt3yn8",
+    "executionTime": "2025-12-04T11:30:31.559Z",
+    "duration": 4394,
+    "rulesExecuted": 1,
+    "rulesProcessed": 1,
+    "rulesUpdated": 1,
+    "errors": [],
+    "executedRules": [
+      {
+        "ruleId": "auto_production_after_days",
+        "ruleName": "Mahi Rule",
+        "processed": 1,
+        "updated": 1,
+        "errors": []
+      }
+    ],
+    "triggeredBy": "automatic_scheduler"
+  },
+  {
+    "id": "exec-1764847835949-4yi6z7p6v",
+    "executionTime": "2025-12-04T11:30:31.560Z",
+    "duration": 4389,
+    "rulesExecuted": 1,
+    "rulesProcessed": 1,
+    "rulesUpdated": 1,
+    "errors": [],
+    "executedRules": [
+      {
+        "ruleId": "auto_production_after_days",
+        "ruleName": "Mahi Rule",
+        "processed": 1,
+        "updated": 1,
+        "errors": []
+      }
+    ],
+    "triggeredBy": "manual"
+  },
+  {
+    "id": "exec-1764833102745-a096eyf7x",
+    "executionTime": "2025-12-04T07:24:59.663Z",
+    "duration": 3082,
+    "rulesExecuted": 1,
+    "rulesProcessed": 1,
+    "rulesUpdated": 1,
+    "errors": [],
+    "executedRules": [
+      {
+        "ruleId": "auto_production_after_days",
+        "ruleName": "Mahi Rule",
+        "processed": 1,
+        "updated": 1,
+        "errors": []
+      }
+    ],
+    "triggeredBy": "automatic_scheduler"
+  },
+  {
+    "id": "exec-1764833102743-lofddd0vu",
+    "executionTime": "2025-12-04T07:24:59.736Z",
+    "duration": 3007,
+    "rulesExecuted": 1,
+    "rulesProcessed": 1,
+    "rulesUpdated": 1,
+    "errors": [],
+    "executedRules": [
+      {
+        "ruleId": "auto_production_after_days",
+        "ruleName": "Mahi Rule",
+        "processed": 1,
+        "updated": 1,
+        "errors": []
+      }
+    ],
+    "triggeredBy": "manual"
+  }
+]

@@ -1,0 +1,434 @@
+.history-filters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+  flex-wrap: wrap;
+}
+
+.history-filters .search-box,
+.history-filters .filter-box {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 14px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  flex: 1;
+  min-width: 200px;
+  box-shadow: var(--shadow-inset);
+  transition: all var(--transition-base);
+}
+
+.history-filters .date-filter-box {
+  position: relative;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 14px 18px;
+}
+
+.history-filters .date-filter-box .date-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin: 0;
+  padding: 0;
+  display: block;
+  white-space: nowrap;
+  min-width: 70px;
+}
+
+.history-filters .date-filter-box input[type="date"] {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-filters .search-box:focus-within,
+.history-filters .filter-box:focus-within {
+  border-color: var(--primary-color);
+}
+
+.history-filters .search-box input {
+  border: none;
+  outline: none;
+  flex: 1;
+  font-size: 14px;
+  background: transparent;
+}
+
+.history-filters .filter-box select {
+  border: none;
+  outline: none;
+  flex: 1;
+  font-size: 14px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.history-results-count {
+  margin-bottom: 24px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+  gap: 24px;
+}
+
+.history-card {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 24px;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-soft);
+  box-sizing: border-box;
+  color: #002329;
+  font-family: Poppins;
+  font-size: 14px;
+  line-height: 1.5714285714285714;
+}
+
+.history-card:hover {
+  box-shadow: var(--shadow-strong);
+  transform: translateY(-4px);
+  border-color: var(--primary-color);
+}
+
+.history-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.history-card-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  flex: 1;
+}
+
+.object-type-badge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #e0f2fe;
+  color: #0369a1;
+  text-transform: capitalize;
+}
+
+.history-card-body {
+  margin-bottom: 16px;
+}
+
+.history-info p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.history-info strong {
+  color: var(--text-primary);
+  margin-right: 8px;
+}
+
+.history-card-actions {
+  display: flex;
+  gap: 8px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.history-card-actions .btn-icon {
+  padding: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Poppins;
+  box-sizing: border-box;
+}
+
+.history-card-actions .btn-icon:hover {
+  background: #08979C;
+  color: white;
+  border-color: #08979C;
+}
+
+.salesforce-id {
+  color: #6b7280;
+  font-size: 12px;
+  font-family: monospace;
+}
+
+.no-history {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-secondary);
+}
+
+/* JSON Modal Styles (reuse from ViewProjects) */
+.json-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.json-modal {
+  background: #ffffff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+  color: #002329;
+  font-family: Poppins;
+  font-size: 14px;
+}
+
+.json-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.json-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.json-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 24px;
+}
+
+.json-content {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 16px;
+  margin: 0;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #002329;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-x: auto;
+}
+
+.loading-spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 100px auto;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* History Table Styles */
+.history-list {
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-soft);
+}
+
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  color: #002329;
+  font-family: Poppins;
+}
+
+.history-table thead {
+  background: #f3f2f2;
+  border-bottom: 2px solid #d8dde6;
+}
+
+.history-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: #706e6b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #d8dde6;
+  background: #f3f2f2;
+  white-space: nowrap;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+.history-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: middle;
+}
+
+.history-table tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.history-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.history-table tbody tr.history-row-failed {
+  background-color: #fef2f2;
+}
+
+.history-table tbody tr.history-row-failed:hover {
+  background-color: #fee2e2;
+}
+
+.history-name-cell {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.operation-badge.operation-create {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.operation-badge.operation-update {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.operation-badge.operation-delete {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.operation-badge.operation-unknown {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.status-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.status-badge.status-partial {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.salesforce-id {
+  color: #6b7280;
+  font-size: 12px;
+  font-family: monospace;
+  cursor: help;
+}
+
+.no-id {
+  color: #9ca3af;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.history-table .btn-icon {
+  padding: 6px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-table .btn-icon:hover {
+  background: #08979C;
+  color: white;
+  border-color: #08979C;
+}
+
+@media (max-width: 1200px) {
+  .history-table {
+    font-size: 12px;
+  }
+  
+  .history-table th,
+  .history-table td {
+    padding: 8px 12px;
+  }
+  
+  .history-name-cell {
+    max-width: 200px;
+  }
+}
+

@@ -1,0 +1,29 @@
+.email-modal .modal-icon {
+  color: #08979C;
+}
+
+.email-btn {
+  background: #08979C;
+}
+
+.email-btn:hover:not(:disabled) {
+  background: #067d82;
+}
+
+.modal-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: Poppins;
+  transition: all 0.2s;
+}
+
+.modal-input:focus {
+  outline: none;
+  border-color: #08979C;
+  box-shadow: 0 0 0 3px rgba(8, 151, 156, 0.1);
+}
+
+

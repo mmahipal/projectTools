@@ -1,0 +1,44 @@
+[
+  {
+    "id": 1,
+    "email": "admin@example.com",
+    "password": "$2a$10$lbRmh9tnMaQV7UYHmyKZfuDRSMVuBW2d5RMO1WJgXs6So.cbmwD9K",
+    "role": "salesforce_manager",
+    "permissions": [
+      "all"
+    ],
+    "createdAt": "2025-11-08T04:51:31.545Z",
+    "isActive": true,
+    "name": "Test User",
+    "updatedAt": "2025-11-24T13:30:41.398Z",
+    "updatedBy": "mmoola@appen.com"
+  },
+  {
+    "id": 2,
+    "email": "mmoola@appen.com",
+    "password": "$2a$10$7sxwracD0Kz5o0qOnKSLQeMeXW9bOFIEjgqEHXL5PRRV.ZJXm.nMq",
+    "name": "Mahipal Reddy Moola",
+    "role": "admin",
+    "permissions": [
+      "all"
+    ],
+    "createdAt": "2025-11-08T04:51:31.637Z",
+    "createdBy": "admin@example.com",
+    "isActive": true,
+    "lastLogin": "2026-01-09T15:23:45.928Z",
+    "updatedAt": "2026-01-09T15:23:45.928Z"
+  },
+  {
+    "id": 3,
+    "email": "mmoola_mercury@appen.com.staging",
+    "password": "$2a$10$2rqrJ5ryoRNSYprMT3DC.OS57qAEikyzkrJ/.qAjvWxLmF33RkbGS",
+    "name": "Mahipal Reddy",
+    "role": "user",
+    "permissions": [
+      "view_project"
+    ],
+    "createdAt": "2025-11-09T09:25:26.611Z",
+    "createdBy": "admin@example.com",
+    "isActive": true
+  }
+]

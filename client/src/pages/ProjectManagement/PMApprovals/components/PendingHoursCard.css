@@ -1,0 +1,69 @@
+.pending-hours-card {
+  background: #fff;
+  border-radius: 6px;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  flex: 1;
+  min-width: 200px;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.card-icon {
+  color: #08979C;
+}
+
+.card-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #002329;
+  margin-bottom: 8px;
+}
+
+.card-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: #08979C;
+  transition: width 0.3s ease;
+}
+
+.progress-label {
+  font-size: 10px;
+  color: #6b7280;
+}
+
+.card-loading {
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+

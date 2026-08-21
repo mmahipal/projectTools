@@ -1,0 +1,1236 @@
+
+> project-setup-app@3.3.0 server
+> nodemon server/index.js
+
+[33m[nodemon] 3.1.10[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Login successful for user: mmoola@appen.com
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Draft"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Draft"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Paused",
+    "elseValue": "Draft"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Paused
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Draft"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source query: SELECT Id, Name,  FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Error querying records: MALFORMED_QUERY: 
+SELECT Id, Name,  FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+                 ^
+ERROR at Row:1:Column:18
+unexpected token: 'FROM'
+    at HttpApi.getError (/Users/mmoola/Cursor/ProjectSetup/node_modules/jsforce/lib/http-api.js:298:15)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async /Users/mmoola/Cursor/ProjectSetup/node_modules/jsforce/lib/http-api.js:127:33
+    at async Query._execute (/Users/mmoola/Cursor/ProjectSetup/node_modules/jsforce/lib/query.js:373:22)
+    at async /Users/mmoola/Cursor/ProjectSetup/node_modules/jsforce/lib/query.js:305:17 {
+  data: {
+    message: '\n' +
+      "SELECT Id, Name,  FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'\n" +
+      '                 ^\n' +
+      'ERROR at Row:1:Column:18\n' +
+      "unexpected token: 'FROM'",
+    errorCode: 'MALFORMED_QUERY'
+  },
+  errorCode: 'MALFORMED_QUERY'
+}
+Query error details: {
+  message: '\n' +
+    "SELECT Id, Name,  FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'\n" +
+    '                 ^\n' +
+    'ERROR at Row:1:Column:18\n' +
+    "unexpected token: 'FROM'",
+  errorCode: 'MALFORMED_QUERY',
+  statusCode: undefined,
+  stack: 'MALFORMED_QUERY: \n' +
+    "SELECT Id, Name,  FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'\n" +
+    '                 ^\n' +
+    'ERROR at Row:1:Column:18\n' +
+    "unexpected token: 'FROM'\n" +
+    '    at HttpApi.getError (/Users/mmoola/Cursor/ProjectSetup/node_modules/jsforce/lib/http-api.js:298:15)\n' +
+    '    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)\n' +
+    '    at async /Users/mmoola/Cursor/ProjectSetup/node_modules/jsforce/lib/http-api.js:127:33\n' +
+    '    at async Query._execute (/Users/mmoola/Cursor/ProjectSetup/node_modules/jsforce/lib/query.js:373:22)\n' +
+    '    at async /Users/mmoola/Cursor/ProjectSetup/node_modules/jsforce/lib/query.js:305:17'
+}
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Draft"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source query: SELECT Id, Name FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Source query returned 1 records
+Update mapping - Executing target query...
+Update mapping - Target query returned 1 records
+Update mapping - Source records: 1 Target records: 1
+Source map size: 1
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Update mapping - Transformed value for Status__c: Draft
+Preparing to update 1 records in Project_Objective__c
+Sample update object: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Draft' }
+Updating batch 1 (1 records)
+Batch 1 result: 1 succeeded, 0 failed
+Error logging bulk operation: TypeError: Cannot read properties of undefined (reading 'filter')
+    at logBulkOperation (/Users/mmoola/Cursor/ProjectSetup/server/utils/historyLogger.js:147:32)
+    at /Users/mmoola/Cursor/ProjectSetup/server/routes/updateObjectFields.js:2681:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%mahi%' OR Name LIKE '%mahi%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%MahiTest9: Hindi-India%' OR Name LIKE '%MahiTest9: Hindi-India%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND Id = 'a0AVC000005lQ5p2AE'
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Draft"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source query: SELECT Id, Name FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Source query returned 1 records
+Update mapping - Executing target query...
+Update mapping - Target query returned 1 records
+Update mapping - Source records: 1 Target records: 1
+Source map size: 1
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Update mapping - Transformed value for Status__c: Draft
+Preparing to update 1 records in Project_Objective__c
+Sample update object: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Draft' }
+Updating batch 1 (1 records)
+Batch 1 result: 1 succeeded, 0 failed
+Error logging bulk operation: TypeError: Cannot read properties of undefined (reading 'filter')
+    at logBulkOperation (/Users/mmoola/Cursor/ProjectSetup/server/utils/historyLogger.js:147:32)
+    at /Users/mmoola/Cursor/ProjectSetup/server/routes/updateObjectFields.js:2681:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%m%' OR Name LIKE '%m%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND Id = 'a0AVC000005lQ5p2AE'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%MahiTest9: Hindi-India%' OR Name LIKE '%MahiTest9: Hindi-India%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Paused"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source query: SELECT Id, Name FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Source query returned 1 records
+Update mapping - Executing target query...
+Update mapping - Target query returned 1 records
+Update mapping - Source records: 1 Target records: 1
+Source map size: 1
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Update mapping - Processing conditional for Status__c
+Update mapping - Condition field: Project_Status__c, Condition value: Open, Operator: equals
+Update mapping - Then value: Open, Else value: Paused
+Update mapping - Condition field value from source record: undefined (type: undefined)
+Update mapping - Condition field is null/undefined, using elseValue if provided
+Update mapping - Final transformed value for Status__c: Paused (type: string)
+Update mapping - Transformed value for Status__c: Paused (type: string)
+Added Status__c = Paused to update object
+Adding update object for record a0AVC000005lQ5p2AE: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Paused' }
+Preparing to update 1 records in Project_Objective__c
+Sample update object: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Paused' }
+Updating batch 1 (1 records)
+Batch 1 result: 1 succeeded, 0 failed
+Error logging bulk operation: TypeError: Cannot read properties of undefined (reading 'filter')
+    at logBulkOperation (/Users/mmoola/Cursor/ProjectSetup/server/utils/historyLogger.js:147:32)
+    at /Users/mmoola/Cursor/ProjectSetup/server/routes/updateObjectFields.js:2705:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%m%' OR Name LIKE '%m%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%MahiTest9: Hindi-India%' OR Name LIKE '%MahiTest9: Hindi-India%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND Id = 'a0AVC000005lQ5p2AE'
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Paused"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source query: SELECT Id, Name FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Source query returned 1 records
+Update mapping - Executing target query...
+Update mapping - Target query returned 1 records
+Update mapping - Source records: 1 Target records: 1
+Source map size: 1
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Update mapping - Processing conditional for Status__c
+Update mapping - Condition field: Project_Status__c, Condition value: Open, Operator: equals
+Update mapping - Then value: Open, Else value: Paused
+Update mapping - Condition field Project_Status__c not found in source record. Available fields: [ 'Id', 'Name', 'attributes' ]
+Update mapping - Condition field value from source record: undefined (type: undefined)
+Update mapping - Condition field is null/undefined, using elseValue if provided
+Update mapping - Final transformed value for Status__c: Paused (type: string)
+Update mapping - Transformed value for Status__c: Paused (type: string)
+Added Status__c = Paused to update object
+Adding update object for record a0AVC000005lQ5p2AE: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Paused' }
+Preparing to update 1 records in Project_Objective__c
+Sample update object: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Paused' }
+Updating batch 1 (1 records)
+Update mapping - Sending batch 1 to Salesforce: [
+  {
+    "Id": "a0AVC000005lQ5p2AE",
+    "Status__c": "Paused"
+  }
+]
+Update mapping - Batch 1 result: 1 succeeded, 0 failed
+Update mapping - Batch 1 successfully updated all 1 records
+Error logging bulk operation: TypeError: Cannot read properties of undefined (reading 'filter')
+    at logBulkOperation (/Users/mmoola/Cursor/ProjectSetup/server/utils/historyLogger.js:147:32)
+    at /Users/mmoola/Cursor/ProjectSetup/server/routes/updateObjectFields.js:2722:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Login successful for user: mmoola@appen.com
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%m%' OR Name LIKE '%m%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND Id = 'a0AVC000005lQ5p2AE'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%MahiTest9: Hindi-India%' OR Name LIKE '%MahiTest9: Hindi-India%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Paused"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source query: SELECT Id, Name FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Source query returned 1 records
+Update mapping - Executing target query...
+Update mapping - Target query returned 1 records
+Update mapping - Source records: 1 Target records: 1
+Source map size: 1
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Update mapping - Processing conditional for Status__c
+Update mapping - Condition field: Project_Status__c, Condition value: Open, Operator: equals
+Update mapping - Then value: Open, Else value: Paused
+Update mapping - Condition field Project_Status__c not found in source record. Available fields: [ 'Id', 'Name', 'attributes' ]
+Update mapping - Condition field value from source record: undefined (type: undefined)
+Update mapping - Condition field is null/undefined, using elseValue if provided
+Update mapping - FINAL transformed value for Status__c: Paused (type: string)
+Error executing field mapping: ReferenceError: conditionWasEvaluated is not defined
+    at /Users/mmoola/Cursor/ProjectSetup/server/routes/updateObjectFields.js:2596:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+Error stack: ReferenceError: conditionWasEvaluated is not defined
+    at /Users/mmoola/Cursor/ProjectSetup/server/routes/updateObjectFields.js:2596:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+Error details: {
+  message: 'conditionWasEvaluated is not defined',
+  name: 'ReferenceError',
+  code: undefined,
+  errorCode: undefined,
+  statusCode: undefined
+}
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%ma%' OR Name LIKE '%ma%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND Id = 'a0AVC000005lQ5p2AE'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%MahiTest9: Hindi-India%' OR Name LIKE '%MahiTest9: Hindi-India%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Paused"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source query: SELECT Id, Name FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Source query returned 1 records
+Update mapping - Executing target query...
+Update mapping - Target query returned 1 records
+Update mapping - Source records: 1 Target records: 1
+Source map size: 1
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Update mapping - Processing conditional for Status__c
+Update mapping - Condition field: Project_Status__c, Condition value: Open, Operator: equals
+Update mapping - Then value: Open, Else value: Paused
+Update mapping - Condition field Project_Status__c not found in source record. Available fields: [ 'Id', 'Name', 'attributes' ]
+Update mapping - Condition field value from source record: undefined (type: undefined)
+Update mapping - Condition field is null/undefined, using elseValue if provided
+Update mapping - FINAL transformed value for Status__c: Paused (type: string)
+Update mapping - VERIFICATION: Condition field was null/undefined, using elseValue if provided, final value = Paused
+Update mapping - Transformed value for Status__c: Paused (type: string)
+Added Status__c = Paused to update object
+Adding update object for record a0AVC000005lQ5p2AE: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Paused' }
+Preparing to update 1 records in Project_Objective__c
+Sample update object: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Paused' }
+Updating batch 1 (1 records)
+Update mapping - Sending batch 1 to Salesforce: [
+  {
+    "Id": "a0AVC000005lQ5p2AE",
+    "Status__c": "Paused"
+  }
+]
+Update mapping - Batch 1 result: 1 succeeded, 0 failed
+Update mapping - Batch 1 successfully updated all 1 records
+Error logging bulk operation: TypeError: Cannot read properties of undefined (reading 'filter')
+    at logBulkOperation (/Users/mmoola/Cursor/ProjectSetup/server/utils/historyLogger.js:147:32)
+    at /Users/mmoola/Cursor/ProjectSetup/server/routes/updateObjectFields.js:2759:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV'
+Salesforce login successful for searching projects, user ID: 005VC00000HvZKEYA3
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%ma%' OR Name LIKE '%ma%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Count query: SELECT COUNT() FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND Id = 'a0AVC000005lQ5p2AE'
+Salesforce login successful for searching project objectives, user ID: https://test.salesforce.com/id/00DVC000002mQof2AE/005VC00000HvZKEYA3
+Executing Project Objective search query: SELECT Id, Name, Contributor_Facing_Project_Name__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND (Contributor_Facing_Project_Name__c LIKE '%MahiTest9: Hindi-India%' OR Name LIKE '%MahiTest9: Hindi-India%') ORDER BY Contributor_Facing_Project_Name__c LIMIT 50
+Found 1 project objectives
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Paused"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source fields collected: [ 'Project_Status__c' ]
+Update mapping - Source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Source query returned 1 records
+Update mapping - Executing target query...
+Update mapping - Target query returned 1 records
+Update mapping - Source records: 1 Target records: 1
+Source map size: 1
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Update mapping - Processing conditional for Status__c
+Update mapping - Condition field: Project_Status__c, Condition value: Open, Operator: equals
+Update mapping - Then value: Open, Else value: Paused
+Update mapping - Condition field value from source record: Open (type: string)
+Update mapping - Comparing: "Open" equals "Open"
+Update mapping - Equals comparison: "Open" === "Open" = true, or trimmed: "Open" === "Open" = true
+Update mapping - FINAL Condition met result: true
+Update mapping - Will use: thenValue
+Update mapping - VERIFICATION: conditionMet = true, Boolean(conditionMet) = true, typeof = boolean
+Update mapping - CONDITION MET (TRUE) - Using thenValue: "Open" (type: string)
+Update mapping - VERIFICATION: Set transformedValue from thenValue = Open
+Update mapping - FINAL transformed value for Status__c: Open (type: string)
+Update mapping - VERIFICATION: Condition was MET, so should use thenValue, actual final value = Open
+Update mapping - Transformed value for Status__c: Open (type: string)
+Added Status__c = Open to update object
+Adding update object for record a0AVC000005lQ5p2AE: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Open' }
+Preparing to update 1 records in Project_Objective__c
+Sample update object: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Open' }
+Updating batch 1 (1 records)
+Update mapping - Sending batch 1 to Salesforce: [
+  {
+    "Id": "a0AVC000005lQ5p2AE",
+    "Status__c": "Open"
+  }
+]
+Update mapping - Batch 1 result: 0 succeeded, 1 failed
+Update mapping - Batch errors: [
+  {
+    "success": false,
+    "errors": [
+      {
+        "statusCode": "FIELD_CUSTOM_VALIDATION_EXCEPTION",
+        "message": "The project must have a minimum rate for the project objective to be opened.",
+        "fields": [
+          "Minimum_Rate__c"
+        ]
+      }
+    ]
+  }
+]
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+=== Multiple Field Update Query ===
+Object Type: project objective
+Field Updates: [
+  {
+    "fieldName": "Minimum_Rate__c",
+    "updateMode": "all",
+    "currentValue": null,
+    "newValue": "2"
+  }
+]
+Applied Filters: {
+  "projectId": "a01VC00003IpSpZYAV",
+  "projectObjectiveId": "a0AVC000005lQ5p2AE"
+}
+Final Query: SELECT Id, Minimum_Rate__c FROM Project_Objective__c WHERE Project__c = 'a01VC00003IpSpZYAV' AND Id = 'a0AVC000005lQ5p2AE'
+==================================
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Source query: SELECT Id, Name, Project_Status__c FROM Project__c
+Final source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV' LIMIT 2000
+Target query: SELECT Id, Name, Status__c, Project__c FROM Project_Objective__c
+Executing source query...
+Source query returned 1 records
+Executing target query...
+Target query returned 1 records
+Preview mapping - Source records: 1 Target records: 1
+Source fields queried: [ 'Project_Status__c' ]
+Mappings received: [
+  {
+    "targetField": "Status__c",
+    "sourceField": "",
+    "transformation": "conditional",
+    "formula": "",
+    "concatenateFields": [],
+    "separator": " ",
+    "dateFormat": "YYYY-MM-DD",
+    "numberFormat": "0.00",
+    "conditionField": "Project_Status__c",
+    "conditionValue": "Open",
+    "conditionOperator": "equals",
+    "thenValue": "Open",
+    "elseValue": "Paused"
+  }
+]
+Sample source record fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Sample source record (first 10 fields): {
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  Project_Status__c: 'Open'
+}
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Processing target record a0AVC000005lQ5p2AE with source record a01VC00003IpSpZYAV
+Processing mapping: targetField=Status__c, sourceField=, transformation=conditional
+Source record available fields: [ 'attributes', 'Id', 'Name', 'Project_Status__c' ]
+Source record values sample: {
+  Id: 'a01VC00003IpSpZYAV',
+  Name: 'MahiTest9',
+  attributes: {
+    type: 'Project__c',
+    url: '/services/data/v50.0/sobjects/Project__c/a01VC00003IpSpZYAV'
+  },
+  Project_Status__c: 'Open'
+}
+Transformed value for Status__c: Open
+Salesforce login successful, user ID: 005VC00000HvZKEYA3
+Update mapping - Source fields collected: [ 'Project_Status__c' ]
+Update mapping - Source query: SELECT Id, Name, Project_Status__c FROM Project__c WHERE Id = 'a01VC00003IpSpZYAV'
+Update mapping - Executing source query...
+Update mapping - Source query returned 1 records
+Update mapping - Executing target query...
+Update mapping - Target query returned 1 records
+Update mapping - Source records: 1 Target records: 1
+Source map size: 1
+Matching Project Objective a0AVC000005lQ5p2AE (Project__c=a01VC00003IpSpZYAV) with Project a01VC00003IpSpZYAV
+Update mapping - Processing conditional for Status__c
+Update mapping - Condition field: Project_Status__c, Condition value: Open, Operator: equals
+Update mapping - Then value: Open, Else value: Paused
+Update mapping - Condition field value from source record: Open (type: string)
+Update mapping - Comparing: "Open" equals "Open"
+Update mapping - Equals comparison: "Open" === "Open" = true, or trimmed: "Open" === "Open" = true
+Update mapping - FINAL Condition met result: true
+Update mapping - Will use: thenValue
+Update mapping - VERIFICATION: conditionMet = true, Boolean(conditionMet) = true, typeof = boolean
+Update mapping - CONDITION MET (TRUE) - Using thenValue: "Open" (type: string)
+Update mapping - VERIFICATION: Set transformedValue from thenValue = Open
+Update mapping - FINAL transformed value for Status__c: Open (type: string)
+Update mapping - VERIFICATION: Condition was MET, so should use thenValue, actual final value = Open
+Update mapping - Transformed value for Status__c: Open (type: string)
+Added Status__c = Open to update object
+Adding update object for record a0AVC000005lQ5p2AE: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Open' }
+Preparing to update 1 records in Project_Objective__c
+Sample update object: { Id: 'a0AVC000005lQ5p2AE', Status__c: 'Open' }
+Updating batch 1 (1 records)
+Update mapping - Sending batch 1 to Salesforce: [
+  {
+    "Id": "a0AVC000005lQ5p2AE",
+    "Status__c": "Open"
+  }
+]
+Update mapping - Batch 1 result: 1 succeeded, 0 failed
+Update mapping - Batch 1 successfully updated all 1 records
+Error logging bulk operation: TypeError: Cannot read properties of undefined (reading 'filter')
+    at logBulkOperation (/Users/mmoola/Cursor/ProjectSetup/server/utils/historyLogger.js:147:32)
+    at /Users/mmoola/Cursor/ProjectSetup/server/routes/updateObjectFields.js:2767:13
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server/index.js`[39m
+Loaded 4 projects from persistent storage
+Login successful for user: mmoola@appen.com
+[32m[nodemon] restarting child process[39m
+[32m[nodemon] starting `node server/index.js`[39m
+node:events:497
+      throw er; // Unhandled 'error' event
+      ^
+
+Error: read EIO
+    at TTY.onStreamRead (node:internal/stream_base_commons:216:20)
+Emitted 'error' event on ReadStream instance at:
+    at emitErrorNT (node:internal/streams/destroy:170:8)
+    at emitErrorCloseNT (node:internal/streams/destroy:129:3)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  errno: -5,
+  code: 'EIO',
+  syscall: 'read'
+}
+
+Node.js v22.19.0

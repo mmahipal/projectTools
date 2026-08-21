@@ -1,0 +1,2099 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import { saveDraftProjectObjective, loadDraftProjectObjective, deleteDraftProjectObjective } from '../utils/draftStorage';
+import { getErrorMessage, handleError } from '../utils/errorHandler';
+import { sanitizeObject } from '../utils/security';
+import { Search, Info, Menu, Send, ChevronRight, ChevronLeft, CheckCircle, XCircle, X, Eye } from 'lucide-react';
+import UserProfileDropdown from '../components/UserProfileDropdown/UserProfileDropdown';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import PreviewModal from '../components/PreviewModal';
+import '../styles/ProjectSetup.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+// Countries list
+const COUNTRIES = [
+  'Afghanistan', 'Aland Islands', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Anguilla', 'Antarctica',
+  'Antigua and Barbuda', 'Argentina', 'Armenia', 'Aruba', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas',
+  'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bermuda', 'Bhutan',
+  'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Bouvet Island', 'Brazil', 'British Indian Ocean Territory',
+  'Brunei Darussalam', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape Verde',
+  'Cayman Islands', 'Central African Republic', 'Chad', 'Chile', 'China', 'Christmas Island', 'Cocos (Keeling) Islands',
+  'Colombia', 'Comoros', 'Congo', 'Congo, The Democratic Republic of The', 'Cook Islands', 'Costa Rica',
+  'Cote D\'Ivoire', 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti', 'Dominica',
+  'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Ethiopia',
+  'Falkland Islands (Malvinas)', 'Faroe Islands', 'Fiji', 'Finland', 'France', 'French Guiana', 'French Polynesia',
+  'French Southern Territories', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Gibraltar', 'Greece',
+  'Greenland', 'Grenada', 'Guadeloupe', 'Guam', 'Guatemala', 'Guernsey', 'Guinea', 'Guinea-Bissau',
+  'Guyana', 'Haiti', 'Heard Island and Mcdonald Islands', 'Holy See (Vatican City State)', 'Honduras',
+  'Hong Kong', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran, Islamic Republic of', 'Iraq', 'Ireland',
+  'Isle of Man', 'Israel', 'Italy', 'Jamaica', 'Japan', 'Jersey', 'Jordan', 'Kazakhstan', 'Kenya',
+  'Kiribati', 'Korea, Democratic People\'s Republic of', 'Korea, Republic of', 'Kuwait', 'Kyrgyzstan',
+  'Lao People\'s Democratic Republic', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libyan Arab Jamahiriya',
+  'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macao', 'Macedonia, The Former Yugoslav Republic of',
+  'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Martinique',
+  'Mauritania', 'Mauritius', 'Mayotte', 'Mexico', 'Micronesia, Federated States of', 'Moldova, Republic of',
+  'Monaco', 'Mongolia', 'Montenegro', 'Montserrat', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia',
+  'Nauru', 'Nepal', 'Netherlands', 'Netherlands Antilles', 'New Caledonia', 'New Zealand', 'Nicaragua',
+  'Niger', 'Nigeria', 'Niue', 'Norfolk Island', 'Northern Mariana Islands', 'Norway', 'Oman', 'Pakistan',
+  'Palau', 'Palestinian Territory, Occupied', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines',
+  'Pitcairn', 'Poland', 'Portugal', 'Puerto Rico', 'Qatar', 'Reunion', 'Romania', 'Russian Federation',
+  'Rwanda', 'Saint Helena', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Pierre and Miquelon',
+  'Saint Vincent and The Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia',
+  'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands',
+  'Somalia', 'South Africa', 'South Georgia and The South Sandwich Islands', 'Spain', 'Sri Lanka',
+  'Sudan', 'Suriname', 'Svalbard and Jan Mayen', 'Swaziland', 'Sweden', 'Switzerland', 'Syrian Arab Republic',
+  'Taiwan, Province of China', 'Tajikistan', 'Tanzania, United Republic of', 'Thailand', 'Timor-Leste',
+  'Togo', 'Tokelau', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Turks and Caicos Islands',
+  'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'United States Minor Outlying Islands',
+  'Uruguay', 'Uzbekistan', 'Vanuatu', 'Venezuela', 'Viet Nam', 'Virgin Islands, British', 'Virgin Islands, U.S.',
+  'Wallis and Futuna', 'Western Sahara', 'Yemen', 'Zambia', 'Zimbabwe'
+];
+
+// Dialects list (sample - can be expanded)
+const DIALECTS = [
+  'Abkhazian', 'Adamawa Fulfulde', 'Adilabad Gondi', 'Afar', 'Afrikaans', 'Aheri Gondi', 'Akan', 'Albanian',
+  'Albay Bicolano', 'Algerian Arabic', 'Algerian Saharan Arabic', 'Amharic', 'Arabic', 'Armenian', 'Assamese',
+  'Azerbaijani', 'Bambara', 'Bangla', 'Basque', 'Belarusian', 'Bengali', 'Bhojpuri', 'Bosnian', 'Bulgarian',
+  'Burmese', 'Catalan', 'Cebuano', 'Chewa', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Chittagonian',
+  'Croatian', 'Czech', 'Danish', 'Dutch', 'English', 'Estonian', 'Filipino', 'Finnish', 'French', 'Fula',
+  'Galician', 'Georgian', 'German', 'Greek', 'Gujarati', 'Haitian Creole', 'Hausa', 'Hebrew', 'Hindi',
+  'Hmong', 'Hungarian', 'Igbo', 'Indonesian', 'Irish', 'Italian', 'Japanese', 'Javanese', 'Kannada',
+  'Kazakh', 'Khmer', 'Kinyarwanda', 'Korean', 'Kurdish', 'Lao', 'Latin', 'Latvian', 'Lithuanian',
+  'Luxembourgish', 'Macedonian', 'Malagasy', 'Malay', 'Malayalam', 'Maltese', 'Mandarin', 'Marathi',
+  'Mongolian', 'Nepali', 'Norwegian', 'Odia', 'Oromo', 'Pashto', 'Persian', 'Polish', 'Portuguese',
+  'Punjabi', 'Romanian', 'Russian', 'Samoan', 'Serbian', 'Shona', 'Sindhi', 'Sinhala', 'Slovak',
+  'Slovenian', 'Somali', 'Spanish', 'Sundanese', 'Swahili', 'Swedish', 'Tagalog', 'Tamil', 'Telugu',
+  'Thai', 'Turkish', 'Ukrainian', 'Urdu', 'Uzbek', 'Vietnamese', 'Welsh', 'Xhosa', 'Yiddish', 'Yoruba', 'Zulu'
+];
+
+const ProjectObjectiveSetup = () => {
+  const navigate = useNavigate();
+  const { user, hasPermission, logout } = useAuth();
+  const { register, handleSubmit, setValue, watch, formState: { errors }, trigger, setError, clearErrors, reset } = useForm();
+  const [loading, setLoading] = useState(false);
+  const [currentSection, setCurrentSection] = useState(0);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [showPublishResultsModal, setShowPublishResultsModal] = useState(false);
+  const [publishResults, setPublishResults] = useState(null);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectSearchTerm, setProjectSearchTerm] = useState('');
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+  const dataLoadedRef = useRef(false);
+  const toastShownRef = useRef(false);
+
+  const sections = [
+    'Project Objective Information',
+    'Admin & System',
+    'Job Information',
+    'Requirements',
+    'Productivity & Diversity',
+    'Funnel Metrics',
+    'Rates & AC IDs',
+    'Action Rules & Quality',
+    'Configuration & Email Templates'
+  ];
+
+  useEffect(() => {
+    // Load existing project objective data from server storage (for editing)
+    const loadExistingData = async () => {
+      // Prevent duplicate loading in React StrictMode
+      if (dataLoadedRef.current) return;
+      
+      try {
+        const objectiveData = await loadDraftProjectObjective();
+        if (objectiveData) {
+          dataLoadedRef.current = true;
+          // Populate form with existing data
+          Object.keys(objectiveData).forEach(key => {
+            if (objectiveData[key] !== null && objectiveData[key] !== undefined) {
+              setValue(key, objectiveData[key]);
+            }
+          });
+          // Set project search term if project exists
+          if (objectiveData.project) {
+            setProjectSearchTerm(objectiveData.project);
+            setSelectedProject(objectiveData.project);
+          }
+          // Prevent duplicate toast notifications
+          if (!toastShownRef.current) {
+            toastShownRef.current = true;
+            toast.success('Project objective data loaded for editing');
+          }
+        } else {
+          // Clear form and set default values for new project objective
+          reset();
+          setDefaultValues();
+        }
+      } catch (error) {
+        const errorMessage = handleError(error, 'ProjectObjectiveSetup - loadProjectObjectiveData');
+        toast.error(errorMessage);
+        // Reset form to defaults
+        reset();
+        setDefaultValues();
+      }
+    };
+    
+    loadExistingData();
+  }, [setValue, reset]);
+
+  // Search projects in Salesforce when search term changes
+  useEffect(() => {
+    const searchProjects = async () => {
+      if (!projectSearchTerm || projectSearchTerm.trim() === '') {
+        setProjects([]);
+        return;
+      }
+
+      setLoadingProjects(true);
+      try {
+        const response = await apiClient.get(`/salesforce/search-projects?search=${encodeURIComponent(projectSearchTerm)}`);
+        if (response.data.success) {
+          setProjects(response.data.projects || []);
+          setShowProjectDropdown(true);
+        }
+      } catch (error) {
+        handleError(error, 'ProjectObjectiveSetup - searchProjects');
+        setProjects([]);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    // Debounce search - wait 300ms after user stops typing
+    const timeoutId = setTimeout(() => {
+      searchProjects();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [projectSearchTerm]);
+
+  const handleProjectSelect = (projectName) => {
+    setSelectedProject(projectName);
+    setValue('project', projectName);
+    setProjectSearchTerm(projectName);
+    setShowProjectDropdown(false);
+  };
+
+  const setDefaultValues = () => {
+    // Set default values for dropdowns and other fields
+    setValue('status', 'Draft');
+    setValue('productivityTargetType', 'Hours');
+    setValue('daysBetweenReminderEmails', '5');
+    setValue('rollingWeeksToModerateNoticeAvail', '6');
+    setValue('rollingWeeksToSevereNoticeAvail', '6');
+    setValue('rollingWeeksToRemovalAvail', '6');
+    setValue('rollingWeeksToModerateNoticeProd', '6');
+    setValue('rollingWeeksToSevereNoticeProd', '6');
+    setValue('rollingWeeksToRemovalProd', '6');
+    setValue('percentToUseFunnelA', '100');
+    setValue('percentToUseFunnelB', '0');
+    setValue('percentToUseFunnelC', '0');
+    setValue('percentToUseFunnelD', '0');
+    setValue('percentToUseFunnelE', '0');
+    // Set default values for dropdowns (empty strings for most)
+    setValue('workType', '');
+    setValue('country', '');
+    setValue('language', '');
+    setValue('dialect', '');
+    setValue('degreeRequirement', '');
+    setValue('languageSkillLevel', '');
+    setValue('fluencyType', '');
+  };
+
+  const validateCurrentSection = async () => {
+    const fields = getRequiredFieldsForSection(currentSection);
+    const values = watch();
+    const newFieldErrors = {};
+    let hasErrors = false;
+    
+    for (const field of fields) {
+      if (!values[field] || (typeof values[field] === 'string' && values[field].trim() === '')) {
+        newFieldErrors[field] = 'This field is required';
+        hasErrors = true;
+      }
+    }
+    
+    if (hasErrors) {
+      setFieldErrors(newFieldErrors);
+      toast.error(`Please fill in all required fields in ${sections[currentSection]}`);
+      return false;
+    }
+    
+    setFieldErrors({});
+    return true;
+  };
+
+  const getRequiredFieldsForSection = (sectionIndex) => {
+    const requiredFields = {
+      0: ['contributorFacingProjectName', 'project', 'projectObjectiveName'], // Project Objective Information - Contributor Facing Project Name, Project, and Project Objective Name are required
+      1: [], // Admin & System
+      2: [], // Job Information
+      3: ['workType'], // Requirements - Work Type is required
+      4: [], // Productivity & Diversity
+      5: [], // Funnel Metrics - read-only
+      6: [], // Rates & AC IDs
+      7: [], // Action Rules & Quality
+      8: ['daysBetweenReminderEmails'] // Configuration & Email Templates - Days Between Reminder Emails is required
+    };
+    return requiredFields[sectionIndex] || [];
+  };
+
+  const nextSection = async () => {
+    const isValid = await validateCurrentSection();
+    if (!isValid) {
+      return;
+    }
+    
+    if (currentSection < sections.length - 1) {
+      setCurrentSection(currentSection + 1);
+      window.scrollTo(0, 0);
+    }
+  };
+
+  const prevSection = () => {
+    if (currentSection > 0) {
+      setCurrentSection(currentSection - 1);
+      window.scrollTo(0, 0);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!hasPermission('create_project')) {
+      toast.error('You do not have permission to publish project objectives');
+      return;
+    }
+
+    const isValid = await validateCurrentSection();
+    if (!isValid) {
+      return;
+    }
+
+    // CRITICAL: Validate that at least one of country or language is selected BEFORE publishing
+    const allFormData = watch();
+    const country = allFormData.country || '';
+    const language = allFormData.language || '';
+    
+    if (!country.trim() && !language.trim()) {
+      toast.error('Either Country or Language must be selected before publishing');
+      setError('country', { type: 'manual', message: 'Either Country or Language must be selected' });
+      setError('language', { type: 'manual', message: 'Either Country or Language must be selected' });
+      setFieldErrors(prev => ({
+        ...prev,
+        country: 'Either Country or Language must be selected',
+        language: 'Either Country or Language must be selected'
+      }));
+      // Navigate to Requirements section (section index 3) where these fields are located
+      setCurrentSection(3);
+      return;
+    }
+
+    // Clear errors if validation passes
+    clearErrors(['country', 'language']);
+    setFieldErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors.country;
+      delete newErrors.language;
+      return newErrors;
+    });
+
+    setSubmitting(true);
+    try {
+      
+      // Include ALL form data - only skip undefined values
+      const cleanedProjectObjectiveData = {};
+      
+      Object.keys(allFormData).forEach(key => {
+        const value = allFormData[key];
+        // Include all values except undefined (keep null, empty strings, etc.)
+        if (value !== undefined) {
+          if (typeof value === 'string') {
+            cleanedProjectObjectiveData[key] = value.trim();
+          } else {
+            cleanedProjectObjectiveData[key] = value;
+          }
+        }
+      });
+      
+      // Publishing project objective
+        totalFields: Object.keys(cleanedProjectObjectiveData).length,
+        fields: Object.keys(cleanedProjectObjectiveData)
+      });
+
+      // Ensure required fields are present
+      if (!cleanedProjectObjectiveData.contributorFacingProjectName || cleanedProjectObjectiveData.contributorFacingProjectName.trim() === '') {
+        cleanedProjectObjectiveData.contributorFacingProjectName = cleanedProjectObjectiveData.projectObjectiveName || 'New Project Objective';
+      }
+
+      // Publishing project objective to Salesforce
+        totalFields: Object.keys(cleanedProjectObjectiveData).length,
+        fields: Object.keys(cleanedProjectObjectiveData),
+        sampleData: {
+          contributorFacingProjectName: cleanedProjectObjectiveData.contributorFacingProjectName,
+          project: cleanedProjectObjectiveData.project,
+          workType: cleanedProjectObjectiveData.workType
+        }
+      });
+
+      // Sanitize data before sending to server
+      const sanitizedData = sanitizeObject(cleanedProjectObjectiveData);
+      
+      // Call Salesforce project objective creation API
+      const response = await apiClient.post('/salesforce/create-project-objective', sanitizedData, {
+        timeout: 300000 // 5 minutes timeout
+      });
+
+      if (response.data.success) {
+        const objectiveName = response.data.objectName || cleanedProjectObjectiveData.contributorFacingProjectName || cleanedProjectObjectiveData.projectObjectiveName || 'Project Objective';
+        setPublishResults({
+          published: [{
+            type: 'Project Objective',
+            name: objectiveName,
+            id: response.data.salesforceId
+          }],
+          failed: []
+        });
+        setShowPublishResultsModal(true);
+        // Project Objective created
+          salesforceId: response.data.salesforceId,
+          objectType: response.data.objectType
+        });
+      } else {
+        setPublishResults({
+          published: [],
+          failed: [{
+            type: 'Project Objective',
+            name: cleanedProjectObjectiveData.contributorFacingProjectName || cleanedProjectObjectiveData.projectObjectiveName || 'Project Objective',
+            error: getErrorMessage(response.data)
+          }]
+        });
+        setShowPublishResultsModal(true);
+      }
+    } catch (error) {
+      let errorMessage = handleError(error, 'ProjectObjectiveSetup - publishProjectObjective');
+      
+      // Extract detailed error information if available
+      if (error.response?.data?.errorData && Array.isArray(error.response.data.errorData) && error.response.data.errorData.length > 0) {
+        const detailedErrors = error.response.data.errorData.map(err => {
+          if (typeof err === 'object') {
+            // Try to extract message from various possible properties
+            // Check common error object structures
+            if (err.message) return err.message;
+            if (err.error) return err.error;
+            if (err.statusCode) return `Status ${err.statusCode}: ${err.message || err.error || 'Unknown error'}`;
+            if (err.status) return `Status: ${err.status}`;
+            if (err.code) return `Error Code: ${err.code}`;
+            // If it's an object with stringifiable content, try to extract meaningful info
+            const keys = Object.keys(err);
+            if (keys.length > 0) {
+              // Try to find a message-like property
+              for (const key of ['message', 'error', 'description', 'detail', 'reason']) {
+                if (err[key]) return String(err[key]);
+              }
+              // Last resort: stringify the object
+              return JSON.stringify(err);
+            }
+            return 'Unknown error';
+          }
+          return String(err);
+        }).filter(Boolean);
+        
+        if (detailedErrors.length > 0) {
+          // Use the detailed errors - they're more specific than the main error message
+          errorMessage = detailedErrors.join('; ');
+        }
+      } else if (error.response?.data?.details) {
+        // Use details if available
+        errorMessage = error.response.data.details;
+      }
+      
+      // Display error message - split by newlines if present
+      const errorLines = errorMessage.split('\n');
+      errorLines.forEach((line, index) => {
+        if (line.trim()) {
+          toast.error(line.trim(), {
+            duration: index === 0 ? 6000 : 4000, // First message shows longer
+            id: `error-${index}` // Prevent duplicate toasts
+          });
+        }
+      });
+      
+      console.error('Error publishing project objective to Salesforce:', error);
+      if (error.response?.data) {
+        console.error('Error details:', error.response.data);
+        if (error.response.data.errorData) {
+          console.error('Detailed errors:', error.response.data.errorData);
+          // Log each error in the array separately for better debugging
+          error.response.data.errorData.forEach((err, index) => {
+            console.error(`Error ${index + 1}:`, err);
+          });
+        }
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      
+      <div className="project-setup" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease' }}>
+        <div className="setup-container">
+          <div className="setup-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button 
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">New Project Objective</h1>
+                  <p className="page-subtitle">Create a new project objective by entering information in the form below</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <UserProfileDropdown />
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit(handlePublish)} className="setup-form">
+                <div className="section-progress">
+                  {sections.map((section, index) => (
+                    <div
+                      key={index}
+                      className={`progress-item ${index === currentSection ? 'active' : ''} ${index < currentSection ? 'completed' : ''}`}
+                      onClick={async () => {
+                        // If clicking on a section ahead of current, validate current section first
+                        if (index > currentSection) {
+                          const isValid = await validateCurrentSection();
+                          if (!isValid) {
+                            toast.error('Please fill in all required fields in the current section before proceeding');
+                            return;
+                          }
+                        }
+                        setCurrentSection(index);
+                        window.scrollTo(0, 0);
+                      }}
+                    >
+                      <span className="progress-number">{index + 1}</span>
+                      <span className="progress-label">{section}</span>
+                    </div>
+                  ))}
+                </div>
+
+            <div className="form-section fade-in">
+              {currentSection === 0 && (
+                <InformationSection 
+                  register={register} 
+                  errors={errors} 
+                  fieldErrors={fieldErrors} 
+                  watch={watch}
+                  projects={projects}
+                  loadingProjects={loadingProjects}
+                  projectSearchTerm={projectSearchTerm}
+                  setProjectSearchTerm={setProjectSearchTerm}
+                  showProjectDropdown={showProjectDropdown}
+                  setShowProjectDropdown={setShowProjectDropdown}
+                  setValue={setValue}
+                  handleProjectSelect={handleProjectSelect}
+                />
+              )}
+              {currentSection === 1 && (
+                <AdminSystemSection register={register} errors={errors} fieldErrors={fieldErrors} watch={watch} />
+              )}
+              {currentSection === 2 && (
+                <JobInformationCombinedSection register={register} errors={errors} fieldErrors={fieldErrors} />
+              )}
+              {currentSection === 3 && (
+                <RequirementsSection register={register} errors={errors} fieldErrors={fieldErrors} watch={watch} />
+              )}
+              {currentSection === 4 && (
+                <ProductivityDiversitySection register={register} />
+              )}
+              {currentSection === 5 && (
+                <FunnelMetricsSection register={register} />
+              )}
+              {currentSection === 6 && (
+                <RatesACIDsSection register={register} />
+              )}
+              {currentSection === 7 && (
+                <ActionRulesQualitySection register={register} />
+              )}
+              {currentSection === 8 && (
+                <ConfigurationEmailTemplatesSection register={register} errors={errors} fieldErrors={fieldErrors} />
+              )}
+            </div>
+
+            <div className="form-actions">
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', width: '100%' }}>
+                <button
+                  type="button"
+                  onClick={prevSection}
+                  disabled={currentSection === 0}
+                  className="btn-secondary"
+                >
+                  Previous
+                </button>
+                {currentSection === sections.length - 1 ? (
+                  <button 
+                    type="button" 
+                    className="btn-secondary" 
+                    onClick={() => {
+                      const allFormData = watch();
+                      setShowPreviewModal(true);
+                    }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                  >
+                    <Eye size={16} />
+                    Preview
+                  </button>
+                ) : null}
+                {currentSection === sections.length - 1 ? (
+                  <>
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        const isValid = await validateCurrentSection();
+                        if (isValid) {
+                          const allFormData = watch();
+                          // Save to backend API
+                          try {
+                            const response = await apiClient.post('/project-objectives', allFormData);
+                            // Also save to localStorage for editing
+                            await saveDraftProjectObjective(allFormData);
+                            toast.success('Project Objective saved successfully!');
+                          } catch (error) {
+                            const errorMessage = handleError(error, 'ProjectObjectiveSetup - saveProjectObjective');
+                            toast.error(errorMessage);
+                          }
+                        }
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button 
+                      type="button" 
+                      className="btn-primary" 
+                      onClick={handlePublish}
+                      disabled={submitting}
+                      style={{ marginLeft: 'auto' }}
+                    >
+                      <Send size={16} style={{ marginRight: '8px' }} />
+                      {submitting ? 'Publishing...' : 'Publish'}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button 
+                      type="button" 
+                      className="btn-secondary" 
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        const isValid = await validateCurrentSection();
+                        if (isValid) {
+                          const allFormData = watch();
+                          // Save to backend API
+                          try {
+                            const response = await apiClient.post('/project-objectives', allFormData);
+                            // Also save to localStorage for editing
+                            await saveDraftProjectObjective(allFormData);
+                            toast.success('Progress saved!');
+                          } catch (error) {
+                            const errorMessage = handleError(error, 'ProjectObjectiveSetup - saveProgress');
+                            toast.error(errorMessage);
+                          }
+                        }
+                      }}
+                    >
+                      Save
+                    </button>
+                    <button 
+                      type="button" 
+                      onClick={nextSection} 
+                      className="btn-primary"
+                      style={{ marginLeft: 'auto' }}
+                    >
+                      Next
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Preview Modal */}
+      <PreviewModal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        objectType="project-objective"
+        formData={watch()}
+        objectLabel="Project Objective"
+        onEdit={() => {
+          setShowPreviewModal(false);
+          // Form is already in edit mode, just close preview to return to form
+        }}
+        onClone={(clonedData) => {
+          // Populate form with cloned data
+          Object.keys(clonedData).forEach(key => {
+            if (clonedData[key] !== undefined && clonedData[key] !== null) {
+              setValue(key, clonedData[key]);
+            }
+          });
+        }}
+      />
+
+      {/* Publish Results Modal */}
+      {showPublishResultsModal && publishResults && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '12px',
+            boxSizing: 'border-box'
+          }}
+          onClick={() => setShowPublishResultsModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '8px',
+              width: '90%',
+              maxWidth: '700px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+              boxSizing: 'border-box',
+              color: '#002329',
+              fontFamily: 'Poppins',
+              fontSize: '14px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              flexShrink: 0
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                {publishResults.failed.length > 0 ? (
+                  <XCircle size={24} color="#ef4444" />
+                ) : (
+                  <CheckCircle size={24} color="#10b981" />
+                )}
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: 600,
+                  color: '#002329',
+                  fontFamily: 'Poppins'
+                }}>
+                  Publish Results
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowPublishResultsModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                <X size={20} color="#64748b" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{
+              padding: '24px',
+              overflowY: 'auto',
+              flex: 1
+            }}>
+              {/* Published Objects */}
+              {publishResults.published.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <h3 style={{
+                    margin: '0 0 16px 0',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#10b981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <CheckCircle size={18} />
+                    Published Successfully ({publishResults.published.length})
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    {publishResults.published.map((obj, index) => (
+                      <div key={index} style={{
+                        padding: '16px',
+                        backgroundColor: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          fontWeight: 600,
+                          color: '#002329',
+                          marginBottom: '8px'
+                        }}>
+                          {obj.type}: "{obj.name}"
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Failed Objects */}
+              {publishResults.failed.length > 0 && (
+                <div>
+                  <h3 style={{
+                    margin: '0 0 16px 0',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <XCircle size={18} />
+                    Failed to Publish ({publishResults.failed.length})
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    {publishResults.failed.map((obj, index) => (
+                      <div key={index} style={{
+                        padding: '16px',
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          fontWeight: 600,
+                          color: '#002329',
+                          marginBottom: '8px'
+                        }}>
+                          {obj.type}: "{obj.name}"
+                        </div>
+                        <div style={{
+                          fontSize: '13px',
+                          color: '#ef4444',
+                          marginTop: '8px'
+                        }}>
+                          Error: {obj.error}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              flexShrink: 0
+            }}>
+              <button
+                onClick={() => {
+                  setShowPublishResultsModal(false);
+                  if (publishResults.failed.length === 0) {
+                    setTimeout(() => {
+                      navigate('/dashboard');
+                    }, 500);
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#08979C',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#067a7f'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#08979C'}
+              >
+                {publishResults.failed.length === 0 ? 'Continue' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Section components
+const AdminSystemSection = ({ register, errors, fieldErrors, watch }) => (
+  <div className="section-content">
+    <h2>Admin & System Information</h2>
+    <div className="form-grid compact-grid">
+      <div className="form-group">
+        <label>
+          <input type="checkbox" {...register('overrideDNH')} />
+          <span>Override DNH</span>
+        </label>
+      </div>
+      <div className="form-group">
+        <label>
+          <input type="checkbox" {...register('displayLeverPostErrorMessage')} />
+          <span>Display Lever Post Error Message</span>
+        </label>
+      </div>
+      <div className="form-group">
+        <label>
+          <input type="checkbox" {...register('createInvites')} />
+          <span>Create Invites</span>
+          <Info size={14} className="info-icon" />
+        </label>
+      </div>
+      <div className="form-group">
+        <label>
+          <input type="checkbox" {...register('refresh')} />
+          <span>Refresh</span>
+        </label>
+      </div>
+      <div className="form-group">
+        <label>
+          Status
+        </label>
+        <select {...register('status')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+          <option value="Draft">Draft</option>
+          <option value="Open">Open</option>
+          <option value="Paused">Paused</option>
+          <option value="Hidden">Hidden</option>
+          <option value="Closed">Closed</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>
+          Country Locale
+        </label>
+        <input type="text" {...register('countryLocale')} />
+      </div>
+      <div className="form-group">
+        <label>
+          Language Locale
+        </label>
+        <input type="text" {...register('languageLocale')} />
+      </div>
+      <div className="form-group">
+        <label>
+          Dialect Locale
+        </label>
+        <input type="text" {...register('dialectLocale')} />
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Mercury Project Objective Type
+          <Info size={14} className="info-icon" />
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          This field is calculated upon save
+        </p>
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Created By
+        </label>
+        <textarea {...register('createdBy')} rows="1" readOnly style={{ fontSize: '12px', padding: '6px 10px', minHeight: '32px' }} />
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Last Modified By
+        </label>
+        <textarea {...register('lastModifiedBy')} rows="1" readOnly style={{ fontSize: '12px', padding: '6px 10px', minHeight: '32px' }} />
+      </div>
+    </div>
+  </div>
+);
+
+const JobInformationCombinedSection = ({ register, errors, fieldErrors }) => (
+  <div className="section-content">
+    <h2>Job Information</h2>
+    <div className="form-grid compact-grid">
+      <div className="form-group full-width">
+        <label>
+          Job Description Template
+          <Info size={14} className="info-icon" />
+        </label>
+        <div style={{ position: 'relative' }}>
+          <input 
+            type="text" 
+            {...register('jobDescriptionTemplate')} 
+            placeholder="Search Job Description Template..."
+            style={{ paddingRight: '40px', fontSize: '13px', padding: '8px' }}
+          />
+          <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+        </div>
+      </div>
+      <div className="form-group">
+        <label>
+          Job Post Action
+          <Info size={14} className="info-icon" />
+        </label>
+        <select {...register('jobPostAction')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+          <option value="Create">Create</option>
+          <option value="Update">Update</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>
+          Job Post Status
+          <Info size={14} className="info-icon" />
+        </label>
+        <select {...register('jobPostStatus')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+          <option value="No Post">No Post</option>
+          <option value="Open">Open</option>
+          <option value="Paused">Paused</option>
+          <option value="Closed">Closed</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Job Posting Distribution
+        </label>
+        <select {...register('leverJobPostingDistribution')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+          <option value="Unlisted">Unlisted</option>
+          <option value="Listed Internal">Listed Internal</option>
+          <option value="Listed External">Listed External</option>
+        </select>
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Job Posting Title
+        </label>
+        <input type="text" {...register('jobPostingTitle')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Job Description
+        </label>
+        <textarea {...register('jobDescription')} rows="3" style={{ fontSize: '12px', padding: '6px 10px', minHeight: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Team
+        </label>
+        <select {...register('leverTeam')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>
+          Location Type *
+        </label>
+        <select {...register('locationType', { required: true })} className={fieldErrors.locationType ? 'error-field' : ''} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+          <option value="remote">remote</option>
+          <option value="hybrid">hybrid</option>
+          <option value="onsite">onsite</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Job Posting Date
+        </label>
+        <input type="date" {...register('leverJobPostingDate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Job Posting ID
+        </label>
+        <input type="text" {...register('leverJobPostingID')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Job Posting URL
+        </label>
+        <input type="text" {...register('leverJobPostingURL')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Minimum Rate
+        </label>
+        <input type="number" step="0.01" {...register('minimumRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Maximum Rate
+        </label>
+        <input type="number" step="0.01" {...register('maximumRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Pay Interval
+        </label>
+        <select {...register('payInterval')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+          <option value="/ hour">/ hour</option>
+          <option value="One-time">One-time</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>
+          Contributor Availability Flag
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('contributorAvailabilityFlag')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Requisition ID
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Department
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Location
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Location Type
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Lever Work Type
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+const InformationSection = ({ 
+  register, 
+  errors, 
+  fieldErrors, 
+  watch, 
+  projects, 
+  loadingProjects,
+  projectSearchTerm,
+  setProjectSearchTerm,
+  showProjectDropdown,
+  setShowProjectDropdown,
+  setValue,
+  handleProjectSelect
+}) => (
+  <div className="section-content">
+    <h2>Project Objective Information</h2>
+    <div className="form-grid compact-grid">
+      <div className="form-group">
+        <label>
+          Contributor Facing Project Name *
+          <Info size={14} className="info-icon" />
+        </label>
+        <input 
+          type="text" 
+          {...register('contributorFacingProjectName', { required: true })} 
+          className={fieldErrors.contributorFacingProjectName ? 'error-field' : ''} 
+          style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}
+        />
+        {errors.contributorFacingProjectName && <span className="error">Required</span>}
+      </div>
+      <div className="form-group">
+        <label>
+          Project Objective Name *
+        </label>
+        <input type="text" {...register('projectObjectiveName', { required: true })} className={fieldErrors.projectObjectiveName ? 'error-field' : ''} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+        {errors.projectObjectiveName && <span className="error">Required</span>}
+      </div>
+      <div className="form-group">
+        <label>
+          Append to Objective Name
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('appendToObjectiveName')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group" style={{ position: 'relative' }}>
+        <label>
+          * Project
+          <Info size={14} className="info-icon" />
+        </label>
+        <div style={{ position: 'relative' }}>
+          <input 
+            type="text" 
+            {...register('project', { required: true })} 
+            className={fieldErrors.project ? 'error-field' : ''} 
+            placeholder="Search or enter project name..."
+            style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', width: '100%', height: '32px' }}
+            value={projectSearchTerm}
+            onChange={(e) => {
+              setProjectSearchTerm(e.target.value);
+              setValue('project', e.target.value);
+              setShowProjectDropdown(true);
+            }}
+            onFocus={() => {
+              if (projectSearchTerm && projects.length > 0) {
+                setShowProjectDropdown(true);
+              }
+            }}
+            onBlur={() => {
+              // Delay hiding dropdown to allow click on option
+              setTimeout(() => setShowProjectDropdown(false), 200);
+            }}
+          />
+                      <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+          {showProjectDropdown && projects.length > 0 && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              backgroundColor: 'white',
+              border: '1px solid #ddd',
+              borderRadius: '4px',
+              maxHeight: '200px',
+              overflowY: 'auto',
+              zIndex: 1000,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              marginTop: '4px'
+            }}>
+              {loadingProjects ? (
+                <div style={{ padding: '8px', fontSize: '13px', color: '#666', textAlign: 'center' }}>Searching...</div>
+              ) : (
+                projects.map(project => (
+                  <div
+                    key={project.id}
+                    onClick={() => handleProjectSelect(project.name)}
+                    style={{
+                      padding: '8px 12px',
+                      cursor: project.status === 'Open' ? 'pointer' : 'not-allowed',
+                      backgroundColor: project.status === 'Open' ? 'white' : '#f5f5f5',
+                      color: project.status === 'Open' ? 'inherit' : '#999',
+                      borderBottom: '1px solid #eee'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (project.status === 'Open') {
+                        e.target.style.backgroundColor = '#f0f0f0';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (project.status === 'Open') {
+                        e.target.style.backgroundColor = 'white';
+                      }
+                    }}
+                  >
+                    {project.name} {project.status !== 'Open' ? `(${project.status})` : ''}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+        {errors.project && <span className="error">Required</span>}
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '4px' }}>
+          Note: The project must have 'Open' status in Salesforce to create a project objective.
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Date Start
+        </label>
+        <input type="date" {...register('dateStart')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Date End
+        </label>
+        <input type="date" {...register('dateEnd')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Selection Criteria
+        </label>
+        <textarea {...register('selectionCriteria')} rows="3" style={{ fontSize: '12px', padding: '6px 10px', minHeight: '32px' }} />
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Project Objective Description
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('projectObjectiveDescription')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Weekly Contributor Production Hours
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" step="0.1" {...register('weeklyContributorProductionHours')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Total Target Productivity Hours
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Weekly Target Production Hours (Calc)
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Target Contributors
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Project Objective ID for Reports
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+const RequirementsSection = ({ register, errors, fieldErrors }) => {
+  const [selectedCountries, setSelectedCountries] = useState([]);
+  const [availableCountries, setAvailableCountries] = useState([...COUNTRIES]);
+  const availableListRef = React.useRef(null);
+  const chosenListRef = React.useRef(null);
+
+  const moveToChosen = () => {
+    if (!availableListRef.current) return;
+    const selected = Array.from(availableListRef.current.selectedOptions).map(opt => opt.value);
+    if (selected.length === 0) return;
+    
+    setSelectedCountries(prev => [...prev, ...selected]);
+    setAvailableCountries(prev => prev.filter(c => !selected.includes(c)));
+    // Clear selection
+    Array.from(availableListRef.current.options).forEach(opt => opt.selected = false);
+  };
+
+  const moveToAvailable = () => {
+    if (!chosenListRef.current) return;
+    const selected = Array.from(chosenListRef.current.selectedOptions).map(opt => opt.value);
+    if (selected.length === 0) return;
+    
+    setAvailableCountries(prev => [...prev, ...selected]);
+    setSelectedCountries(prev => prev.filter(c => !selected.includes(c)));
+    // Clear selection
+    Array.from(chosenListRef.current.options).forEach(opt => opt.selected = false);
+  };
+
+  return (
+    <div className="section-content">
+      <h2>Requirements</h2>
+      <div className="form-grid compact-grid">
+        <div className="form-group">
+          <label>
+            Country <span style={{ color: '#e74c3c' }}>*</span>
+            <span style={{ fontSize: '11px', color: '#666', marginLeft: '5px', fontStyle: 'italic' }}>
+              (At least one of Country or Language must be selected)
+            </span>
+          </label>
+          <select 
+            {...register('country')} 
+            className={fieldErrors.country ? 'error-field' : ''}
+            style={{ 
+              fontSize: '13px', 
+              padding: '8px',
+              border: fieldErrors.country ? '2px solid #e74c3c' : '1px solid #ddd'
+            }}
+          >
+            <option value="">--None--</option>
+            {COUNTRIES.map(country => (
+              <option key={country} value={country}>{country}</option>
+            ))}
+          </select>
+          {fieldErrors.country && <span className="error" style={{ fontSize: '12px', color: '#e74c3c', display: 'block', marginTop: '4px' }}>{fieldErrors.country}</span>}
+        </div>
+        <div className="form-group">
+          <label>
+            Language <span style={{ color: '#e74c3c' }}>*</span>
+            <span style={{ fontSize: '11px', color: '#666', marginLeft: '5px', fontStyle: 'italic' }}>
+              (At least one of Country or Language must be selected)
+            </span>
+          </label>
+          <select 
+            {...register('language')} 
+            className={fieldErrors.language ? 'error-field' : ''}
+            style={{ 
+              fontSize: '13px', 
+              padding: '8px',
+              border: fieldErrors.language ? '2px solid #e74c3c' : '1px solid #ddd'
+            }}
+          >
+            <option value="">--None--</option>
+            {DIALECTS.map(language => (
+              <option key={language} value={language}>{language}</option>
+            ))}
+          </select>
+          {fieldErrors.language && <span className="error" style={{ fontSize: '12px', color: '#e74c3c', display: 'block', marginTop: '4px' }}>{fieldErrors.language}</span>}
+        </div>
+        <div className="form-group">
+          <label>
+            * Work Type
+          </label>
+          <select {...register('workType', { required: true })} className={fieldErrors.workType ? 'error-field' : ''} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+            <option value="">--None--</option>
+            <option value="Independent Contractor - Project Based">Independent Contractor - Project Based</option>
+            <option value="Part-time Employee">Part-time Employee</option>
+            <option value="Facility Employee">Facility Employee</option>
+            <option value="Independent Contractor - Pro Project Based">Independent Contractor - Pro Project Based</option>
+          </select>
+          {errors.workType && <span className="error">Required</span>}
+        </div>
+        <div className="form-group">
+          <label>
+            Dialect (Country)
+            <Info size={14} className="info-icon" />
+          </label>
+          <select {...register('dialect')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+            <option value="">--None--</option>
+            {DIALECTS.map(dialect => (
+              <option key={dialect} value={dialect}>{dialect}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>
+            Degree Requirement
+            <Info size={14} className="info-icon" />
+          </label>
+          <select {...register('degreeRequirement')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+            <option value="">--None--</option>
+            <option value="Secondary Education">Secondary Education</option>
+            <option value="Vocational Education">Vocational Education</option>
+            <option value="Bachelor">Bachelor</option>
+            <option value="Master">Master</option>
+            <option value="Post-Master">Post-Master</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label>
+            Language Skill Level
+            <Info size={14} className="info-icon" />
+          </label>
+          <select {...register('languageSkillLevel')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+            <option value="">--None--</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Elementary">Elementary</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Fluent">Fluent</option>
+            <option value="Native">Native</option>
+            <option value="Professional">Professional</option>
+          </select>
+        </div>
+        <div className="form-group">
+          <label>
+            <input type="checkbox" {...register('additionalManualMatchRequired')} />
+            <span>Additional Manual Match Required</span>
+            <Info size={14} className="info-icon" />
+          </label>
+        </div>
+        <div className="form-group">
+          <label>
+            Fluency Type
+          </label>
+          <select {...register('fluencyType')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+            <option value="">--None--</option>
+            <option value="Spoken">Spoken</option>
+            <option value="Written">Written</option>
+            <option value="Both">Both</option>
+          </select>
+        </div>
+      </div>
+      
+      <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '16px', color: 'var(--text-primary)' }}>
+          Multiple Country Sourcing
+        </h3>
+        <div className="form-grid compact-grid">
+          <div className="form-group">
+            <label>
+              <input type="checkbox" {...register('includeInCountryList')} />
+              <span>Include in Country List</span>
+              <Info size={14} className="info-icon" />
+            </label>
+          </div>
+        </div>
+        <div style={{ marginTop: '16px' }}>
+          <label style={{ fontSize: '12px', fontWeight: 500, marginBottom: '8px', display: 'block' }}>
+            List of Countries
+            <Info size={14} className="info-icon" />
+          </label>
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, marginBottom: '8px', color: 'var(--text-secondary)' }}>Available</div>
+              <select 
+                ref={availableListRef}
+                multiple 
+                size={8}
+                style={{ 
+                  width: '100%', 
+                  fontSize: '13px', 
+                  padding: '8px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  minHeight: '200px'
+                }}
+              >
+                {availableCountries.map(country => (
+                  <option key={country} value={country}>{country}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '8px', paddingTop: '24px' }}>
+              <button
+                type="button"
+                onClick={moveToChosen}
+                style={{
+                  padding: '8px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  background: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title="Move to Chosen"
+              >
+                <ChevronRight size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={moveToAvailable}
+                style={{
+                  padding: '8px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  background: 'white',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title="Move to Available"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: '12px', fontWeight: 500, marginBottom: '8px', color: 'var(--text-secondary)' }}>Chosen</div>
+              <select 
+                ref={chosenListRef}
+                multiple 
+                size={8}
+                {...register('selectedCountries')}
+                style={{ 
+                  width: '100%', 
+                  fontSize: '13px', 
+                  padding: '8px',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '4px',
+                  minHeight: '200px'
+                }}
+              >
+                {selectedCountries.map(country => (
+                  <option key={country} value={country}>{country}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--border-color)' }}>
+        <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '16px', color: 'var(--text-primary)' }}>
+          Funnel Splits
+        </h3>
+        <div className="form-grid compact-grid">
+          <div className="form-group">
+            <label>
+              % to use Funnel A
+              <Info size={14} className="info-icon" />
+            </label>
+            <input type="number" {...register('percentToUseFunnelA')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+          </div>
+          <div className="form-group">
+            <label>
+              % to use Funnel B
+              <Info size={14} className="info-icon" />
+            </label>
+            <input type="number" {...register('percentToUseFunnelB')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+          </div>
+          <div className="form-group">
+            <label>
+              % to use Funnel C
+              <Info size={14} className="info-icon" />
+            </label>
+            <input type="number" {...register('percentToUseFunnelC')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+          </div>
+          <div className="form-group">
+            <label>
+              % to use Funnel D
+              <Info size={14} className="info-icon" />
+            </label>
+            <input type="number" {...register('percentToUseFunnelD')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+          </div>
+          <div className="form-group">
+            <label>
+              % to use Funnel E
+              <Info size={14} className="info-icon" />
+            </label>
+            <input type="number" {...register('percentToUseFunnelE')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ProductivityDiversitySection = ({ register }) => (
+  <div className="section-content">
+    <h2>Productivity & Diversity</h2>
+    <div className="form-grid compact-grid">
+      <div className="form-group">
+        <label>
+          * Productivity Target Type
+        </label>
+        <select {...register('productivityTargetType')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+          <option value="Hours">Hours</option>
+          <option value="Hours & units/hour">Hours & units/hour</option>
+          <option value="Units & units/hour">Units & units/hour</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>
+          Target Production Hours
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" step="0.1" {...register('targetProductionHours')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Minimum # Contributors
+        </label>
+        <input type="number" {...register('minimumContributors')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Weekly Target Production Hours (Calc)
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+const FunnelMetricsSection = ({ register }) => (
+  <div className="section-content">
+    <h2>Funnel Metrics</h2>
+    <div className="form-grid compact-grid">
+      <div className="form-group">
+        <label>
+          Total Applied
+          <Info size={14} className="info-icon" />
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          Total Qualified
+          <Info size={14} className="info-icon" />
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          # Invited/Available Contributors
+          <Info size={14} className="info-icon" />
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          # App Received
+          <Info size={14} className="info-icon" />
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          # Matched Contributors
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          # Removed
+          <Info size={14} className="info-icon" />
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          # Qualified Contributors
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          # Active Contributors
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          # Production Contributors
+          <Info size={14} className="info-icon" />
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+    </div>
+  </div>
+);
+
+const RatesACIDsSection = ({ register }) => (
+  <div className="section-content">
+    <h2>Rates & AC IDs</h2>
+    <div className="form-grid compact-grid">
+      <div className="form-group">
+        <label>
+          Non-US Fairpay Rate
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" step="0.01" {...register('nonUSFairpayRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Non-US Project Pay rate
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" step="0.01" {...register('nonUSProjectPayRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Project Objective Pay Rate
+        </label>
+        <input type="number" step="0.01" {...register('projectObjectivePayRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Project Pay Rate
+        </label>
+        <input type="number" step="0.01" {...register('projectPayRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Client Project Type Pay Rate
+        </label>
+        <input type="number" step="0.01" {...register('clientProjectTypePayRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Client Pay Rate
+        </label>
+        <input type="number" step="0.01" {...register('clientPayRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Project Type Pay Rate
+        </label>
+        <input type="number" step="0.01" {...register('projectTypePayRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Pay Rate % Above Fairpay
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" step="0.01" {...register('payRatePercentAboveFairpay')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Flat Pay Rate
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" step="0.01" {...register('flatPayRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Project Incentive Rate
+        </label>
+        <input type="number" step="0.01" {...register('projectIncentiveRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          <input type="checkbox" {...register('hideRate')} />
+          <span>Hide Rate</span>
+          <Info size={14} className="info-icon" />
+        </label>
+      </div>
+      <div className="form-group">
+        <label>
+          Minimum Rate
+        </label>
+        <input type="number" step="0.01" {...register('minimumRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Maximum Rate
+        </label>
+        <input type="number" step="0.01" {...register('maximumRate')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Project Rate
+          <Info size={14} className="info-icon" />
+        </label>
+        <p style={{ fontStyle: 'italic', fontSize: '11px', color: '#666', marginTop: '2px' }}>
+          Calculated upon save
+        </p>
+      </div>
+      <div className="form-group">
+        <label>
+          AC Project ID
+        </label>
+        <input type="text" {...register('acProjectID')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Event Logs AC Project ID
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('eventLogsACProjectID')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Roster User Group ID Exclusive
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('rosterUserGroupIDExclusive')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Roster User Group ID
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('rosterUserGroupID')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Roster User Group Name
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('rosterUserGroupName')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+    </div>
+  </div>
+);
+
+const ActionRulesQualitySection = ({ register }) => (
+  <div className="section-content">
+    <h2>Action Rules & Quality</h2>
+    <div className="form-grid compact-grid">
+      <div className="form-group">
+        <label>
+          Moderate to Notice (Avail)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('moderateToNoticeAvail')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Severe to Notice (Avail)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('severeToNoticeAvail')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Notice to Removal (Avail)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('noticeToRemovalAvail')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Rolling Weeks to Moderate Notice (Avail)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" {...register('rollingWeeksToModerateNoticeAvail')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Rolling Weeks to Severe Notice (Avail)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" {...register('rollingWeeksToSevereNoticeAvail')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Rolling Weeks to Removal (Avail)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" {...register('rollingWeeksToRemovalAvail')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Contributor Productivity Flag
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('contributorProductivityFlag')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Contributor Overproductivity Flag
+        </label>
+        <input type="text" {...register('contributorOverproductivityFlag')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Moderate to Notice (Prod)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('moderateToNoticeProd')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Severe to Notice (Prod)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('severeToNoticeProd')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Notice to Removal (Prod)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="text" {...register('noticeToRemovalProd')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Rolling Weeks to Moderate Notice (Prod)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" {...register('rollingWeeksToModerateNoticeProd')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Rolling Weeks to Severe Notice (Prod)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" {...register('rollingWeeksToSevereNoticeProd')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Rolling Weeks to Removal (Prod)
+          <Info size={14} className="info-icon" />
+        </label>
+        <input type="number" {...register('rollingWeeksToRemovalProd')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group">
+        <label>
+          Main Quality Metric
+        </label>
+        <select {...register('mainQualityMetric')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}>
+          <option value="">--None--</option>
+          <option value="Audit Accuracy">Audit Accuracy</option>
+          <option value="Spot Check Accuracy">Spot Check Accuracy</option>
+          <option value="Golden Set Accuracy">Golden Set Accuracy</option>
+          <option value="Agreement (Multi-Review)">Agreement (Multi-Review)</option>
+          <option value="Label Level Accuracy">Label Level Accuracy</option>
+          <option value="Precision">Precision</option>
+          <option value="Recall (Sensitivity)">Recall (Sensitivity)</option>
+          <option value="F-1 Score">F-1 Score</option>
+          <option value="Specificity (True Negative Score)">Specificity (True Negative Score)</option>
+          <option value="REF (Rapid Evaluation Feedback)">REF (Rapid Evaluation Feedback)</option>
+          <option value="Real Time Audits">Real Time Audits</option>
+        </select>
+      </div>
+      <div className="form-group">
+        <label>
+          Contributor Quality Flag
+        </label>
+        <input type="text" {...register('contributorQualityFlag')} style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+    </div>
+  </div>
+);
+
+const ConfigurationEmailTemplatesSection = ({ register, errors, fieldErrors }) => (
+  <div className="section-content">
+    <h2>Configuration & Email Templates</h2>
+    <div className="form-grid compact-grid">
+      <div className="form-group">
+        <label>
+          * Days Between Reminder Emails
+        </label>
+        <input 
+          type="number" 
+          {...register('daysBetweenReminderEmails', { required: true })} 
+          className={fieldErrors.daysBetweenReminderEmails ? 'error-field' : ''} 
+          style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}
+        />
+        {errors.daysBetweenReminderEmails && <span className="error">Required</span>}
+      </div>
+      <div className="form-group">
+        <label>
+          <input type="checkbox" {...register('emailContentComplete')} />
+          <span>Email Content Complete</span>
+          <Info size={14} className="info-icon" />
+        </label>
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Communication Template
+          <Info size={14} className="info-icon" />
+        </label>
+        <div style={{ position: 'relative' }}>
+          <input 
+            type="text" 
+            {...register('communicationTemplate')} 
+            placeholder="Search Communication Templates..."
+            style={{ paddingRight: '40px', fontSize: '13px', padding: '8px' }}
+          />
+          <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+        </div>
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Contributor Project Description Email
+        </label>
+        <textarea {...register('contributorProjectDescriptionEmail')} rows="3" style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Qualification Steps Email
+        </label>
+        <textarea {...register('qualificationStepsEmail')} rows="3" style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Registration Steps Email
+        </label>
+        <textarea {...register('registrationStepsEmail')} rows="3" style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+      <div className="form-group full-width">
+        <label>
+          Onboarding Steps Email
+        </label>
+        <textarea {...register('onboardingStepsEmail')} rows="3" style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }} />
+      </div>
+    </div>
+  </div>
+);
+
+export default ProjectObjectiveSetup;
+

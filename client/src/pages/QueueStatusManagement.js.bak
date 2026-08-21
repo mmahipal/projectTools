@@ -1,0 +1,944 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import QueueStatusDashboard from '../components/QueueStatusDashboard';
+import QueueStatusScheduleManager from '../components/QueueStatusScheduleManager';
+import { Menu, LogOut, Search, RefreshCw, Send, Loader, Download, AlertCircle, BarChart3, Clock } from 'lucide-react';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
+import BookmarkButton from '../components/BookmarkButton';
+import { getAllowedTransitions, isValidTransition, getTransitionDescription } from './QueueStatusManagement/transitionRules';
+import '../styles/QueueStatusManagement.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+const QueueStatusManagement = () => {
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [loading, setLoading] = useState(true);
+  const [contributorProjects, setContributorProjects] = useState([]);
+  const [filteredContributorProjects, setFilteredContributorProjects] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [queueStatusFilter, setQueueStatusFilter] = useState('');
+  const [hasMoreProjects, setHasMoreProjects] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [selectedProjects, setSelectedProjects] = useState([]);
+  const [queueStatusUpdates, setQueueStatusUpdates] = useState({}); // { projectId: queueStatus }
+  const [bulkQueueStatus, setBulkQueueStatus] = useState(''); // Bulk update queue status for selected projects
+  const [publishing, setPublishing] = useState(false);
+  const [activeTab, setActiveTab] = useState('management'); // 'management', 'dashboard', 'schedule'
+  
+  // Refs for infinite scroll
+  const infiniteScrollRef = useRef(null);
+  const tableContainerRef = useRef(null);
+  const contributorProjectsRef = useRef([]);
+  const hasMoreProjectsRef = useRef(false);
+  const loadingMoreRef = useRef(false);
+  const searchTermRef = useRef('');
+  const statusFilterRef = useRef('');
+  const queueStatusFilterRef = useRef('');
+
+  // Queue Status picklist values
+  const queueStatusOptions = [
+    '--None--',
+    'Calibration Queue',
+    'Production Queue',
+    'Test Queue'
+  ];
+
+  const fetchContributorProjects = async (append = false) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+      setHasMoreProjects(false);
+    }
+    try {
+      const offset = append ? contributorProjects.length : 0;
+      
+      // Build query parameters with filters
+      const params = new URLSearchParams({
+        limit: '1000',
+        offset: offset.toString()
+      });
+      
+      // Add search term if provided
+      if (searchTerm && searchTerm.trim() !== '') {
+        params.append('searchTerm', searchTerm.trim());
+      }
+      
+      // Add status filter if provided
+      if (statusFilter && statusFilter !== '') {
+        params.append('statusFilter', statusFilter);
+      }
+      
+      // Add queue status filter if provided
+      if (queueStatusFilter && queueStatusFilter !== '') {
+        params.append('queueStatusFilter', queueStatusFilter);
+      }
+      
+      const response = await apiClient.get(`/queue-status-management/contributor-projects?${params.toString()}`);
+      if (response.data.success) {
+        if (append) {
+          setContributorProjects(prev => [...prev, ...(response.data.projects || [])]);
+        } else {
+          setContributorProjects(response.data.projects || []);
+          setQueueStatusUpdates({});
+          setSelectedProjects([]);
+          setBulkQueueStatus('');
+        }
+        setHasMoreProjects(response.data.hasMore || false);
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch contributor projects';
+      toast.error(errorMessage);
+    } finally {
+      if (append) {
+        setLoadingMore(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Refresh handler that ensures proper reset
+  const handleRefresh = useCallback((e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    // Clear existing projects
+    setContributorProjects([]);
+    // Reset refs
+    contributorProjectsRef.current = [];
+    hasMoreProjectsRef.current = false;
+    setHasMoreProjects(false);
+    // Fetch fresh data
+    fetchContributorProjects(false);
+  }, []);
+
+  useEffect(() => {
+    fetchContributorProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Filter is now done server-side, so we just use the projects as-is
+  // But we still need to update when filters change to trigger a new fetch
+  useEffect(() => {
+    // When filters change, reset and fetch with new filters (don't append)
+    if (!loading) {
+      setContributorProjects([]); // Clear existing projects
+      fetchContributorProjects(false); // Fetch from beginning
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTerm, statusFilter, queueStatusFilter]);
+
+  // Update filtered list when projects change (no client-side filtering needed)
+  useEffect(() => {
+    setFilteredContributorProjects(contributorProjects);
+  }, [contributorProjects]);
+
+  // Synchronize refs with state
+  useEffect(() => {
+    contributorProjectsRef.current = contributorProjects;
+  }, [contributorProjects]);
+
+  useEffect(() => {
+    hasMoreProjectsRef.current = hasMoreProjects;
+  }, [hasMoreProjects]);
+
+  useEffect(() => {
+    loadingMoreRef.current = loadingMore;
+  }, [loadingMore]);
+
+  useEffect(() => {
+    searchTermRef.current = searchTerm;
+  }, [searchTerm]);
+
+  useEffect(() => {
+    statusFilterRef.current = statusFilter;
+  }, [statusFilter]);
+
+  useEffect(() => {
+    queueStatusFilterRef.current = queueStatusFilter;
+  }, [queueStatusFilter]);
+
+  // Function to load more projects (for infinite scroll)
+  const loadMoreProjects = useCallback(() => {
+    const currentHasMore = hasMoreProjectsRef.current;
+    const currentLoading = loadingMoreRef.current;
+    
+    if (currentLoading || !currentHasMore) {
+      return;
+    }
+    
+    const currentOffset = contributorProjectsRef.current.length;
+    
+    // Prevent multiple simultaneous loads
+    if (loadingMoreRef.current) {
+      return;
+    }
+    
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    
+    const params = new URLSearchParams({
+      limit: '1000',
+      offset: currentOffset.toString()
+    });
+    
+    // Get current filter values from refs
+    const currentSearchTerm = searchTermRef.current;
+    const currentStatusFilter = statusFilterRef.current;
+    const currentQueueStatusFilter = queueStatusFilterRef.current;
+    
+    if (currentSearchTerm && currentSearchTerm.trim() !== '') {
+      params.append('searchTerm', currentSearchTerm.trim());
+    }
+    
+    if (currentStatusFilter && currentStatusFilter !== '') {
+      params.append('statusFilter', currentStatusFilter);
+    }
+    
+    if (currentQueueStatusFilter && currentQueueStatusFilter !== '') {
+      params.append('queueStatusFilter', currentQueueStatusFilter);
+    }
+    
+    apiClient.get(`/queue-status-management/contributor-projects?${params.toString()}`)
+      .then(response => {
+        if (response.data.success) {
+          setContributorProjects(prev => {
+            const newProjects = [...prev, ...(response.data.projects || [])];
+            return newProjects;
+          });
+          setHasMoreProjects(response.data.hasMore || false);
+          hasMoreProjectsRef.current = response.data.hasMore || false;
+        }
+      })
+      .catch(error => {
+        const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch more contributor projects';
+        toast.error(errorMessage);
+      })
+      .finally(() => {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      });
+  }, []);
+
+  // Set up IntersectionObserver for infinite scroll
+  useEffect(() => {
+    if (!hasMoreProjects) {
+      return;
+    }
+
+    const element = infiniteScrollRef.current;
+    const tableContainer = tableContainerRef.current;
+    
+    if (!element || !tableContainer || loadingMore) {
+      return;
+    }
+
+    let loadTriggered = false;
+
+    const handleIntersection = (entries) => {
+      const entry = entries[0];
+      
+      if (entry.isIntersecting && !loadTriggered && hasMoreProjectsRef.current && !loadingMoreRef.current) {
+        loadTriggered = true;
+        loadMoreProjects();
+        
+        setTimeout(() => {
+          loadTriggered = false;
+        }, 2000);
+      }
+    };
+
+    const handleScroll = () => {
+      if (loadTriggered || loadingMoreRef.current || !hasMoreProjectsRef.current) {
+        return;
+      }
+      
+      if (!element || !tableContainer) return;
+      
+      const containerRect = tableContainer.getBoundingClientRect();
+      const elementRect = element.getBoundingClientRect();
+      const isVisible = elementRect.top <= containerRect.bottom + 200;
+      
+      if (isVisible) {
+        loadTriggered = true;
+        loadMoreProjects();
+        
+        setTimeout(() => {
+          loadTriggered = false;
+        }, 2000);
+      }
+    };
+
+    try {
+      const observer = new IntersectionObserver(handleIntersection, {
+        root: tableContainer,
+        rootMargin: '200px',
+        threshold: [0, 0.1, 0.5, 1.0]
+      });
+
+      observer.observe(element);
+
+      tableContainer.addEventListener('scroll', handleScroll, { passive: true });
+
+      const checkVisibility = () => {
+        if (!element || !tableContainer) return;
+        const containerRect = tableContainer.getBoundingClientRect();
+        const elementRect = element.getBoundingClientRect();
+        const isVisible = elementRect.top < containerRect.bottom + 200;
+        
+        if (isVisible && hasMoreProjectsRef.current && !loadingMoreRef.current && !loadTriggered) {
+          loadTriggered = true;
+          loadMoreProjects();
+          
+          setTimeout(() => {
+            loadTriggered = false;
+          }, 2000);
+        }
+      };
+
+      const visibilityTimeout = setTimeout(checkVisibility, 300);
+
+      return () => {
+        try {
+          observer.disconnect();
+        } catch (e) {
+          // Ignore disconnect errors
+        }
+        tableContainer.removeEventListener('scroll', handleScroll);
+        clearTimeout(visibilityTimeout);
+      };
+    } catch (error) {
+      // If IntersectionObserver is not supported, just return
+      return;
+    }
+  }, [hasMoreProjects, loadingMore, loadMoreProjects]);
+
+  const toggleSelection = (projectId) => {
+    setSelectedProjects(prev => {
+      if (prev.includes(projectId)) {
+        const newSelected = prev.filter(id => id !== projectId);
+        // Clear bulk status if less than 2 projects are selected
+        if (newSelected.length < 2) {
+          setBulkQueueStatus('');
+        }
+        return newSelected;
+      } else {
+        const newSelected = [...prev, projectId];
+        return newSelected;
+      }
+    });
+  };
+
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      const allSelected = filteredContributorProjects.map(p => p.id);
+      setSelectedProjects(allSelected);
+      // Clear bulk status if less than 2 projects are selected
+      if (allSelected.length < 2) {
+        setBulkQueueStatus('');
+      }
+    } else {
+      setSelectedProjects([]);
+      setBulkQueueStatus(''); // Clear bulk status when deselecting all
+    }
+  };
+
+  const handleQueueStatusChange = (projectId, value) => {
+    // Find the project to get current status
+    const project = contributorProjects.find(p => p.id === projectId);
+    const currentStatus = project?.currentQueueStatus || null;
+    
+    // Validate transition
+    if (!isValidTransition(currentStatus, value)) {
+      toast.error(`Invalid transition: Cannot change from "${currentStatus || '--None--'}" to "${value}". ${getTransitionDescription(currentStatus)}`);
+      return;
+    }
+    
+    setQueueStatusUpdates(prev => ({
+      ...prev,
+      [projectId]: value === '--None--' ? null : value
+    }));
+    // Clear bulk status when individual change is made
+    setBulkQueueStatus('');
+  };
+
+  const handleBulkQueueStatusChange = (value) => {
+    // Validate transitions for all selected projects
+    const invalidProjects = [];
+    selectedProjects.forEach(projectId => {
+      const project = contributorProjects.find(p => p.id === projectId);
+      const currentStatus = project?.currentQueueStatus || null;
+      if (!isValidTransition(currentStatus, value)) {
+        invalidProjects.push(project?.contributorProjectName || projectId);
+      }
+    });
+    
+    if (invalidProjects.length > 0) {
+      toast.error(`Invalid transitions for ${invalidProjects.length} project(s). Please check individual transitions.`);
+      return;
+    }
+    
+    setBulkQueueStatus(value);
+    // Apply bulk status to all selected projects
+    const updates = {};
+    selectedProjects.forEach(projectId => {
+      updates[projectId] = value === '--None--' ? null : value;
+    });
+    setQueueStatusUpdates(prev => ({
+      ...prev,
+      ...updates
+    }));
+  };
+
+  // Check if publish button should be enabled
+  const canPublish = () => {
+    if (selectedProjects.length === 0) return false;
+    
+    // If bulk status is set, check if it's different from current status for at least one project
+    if (bulkQueueStatus && bulkQueueStatus !== '') {
+      const bulkStatus = bulkQueueStatus === '--None--' ? null : bulkQueueStatus;
+      return selectedProjects.some(projectId => {
+        const project = contributorProjects.find(p => p.id === projectId);
+        if (!project) return false;
+        
+        const currentStatus = project.currentQueueStatus || null;
+        return currentStatus !== bulkStatus;
+      });
+    }
+    
+    // If no bulk status is set, check individual updates
+    return selectedProjects.some(projectId => {
+      const project = contributorProjects.find(p => p.id === projectId);
+      if (!project) return false;
+      
+      const currentStatus = project.currentQueueStatus || null;
+      const updateStatus = queueStatusUpdates[projectId] !== undefined 
+        ? queueStatusUpdates[projectId] 
+        : currentStatus;
+      
+      return currentStatus !== updateStatus;
+    });
+  };
+
+  const handleExportToExcel = () => {
+    if (filteredContributorProjects.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    try {
+      // Prepare data for export - only table columns
+      const exportData = filteredContributorProjects.map(project => ({
+        'Contributor Project Name': project.contributorProjectName || 'N/A',
+        'Project': project.project || 'N/A',
+        'Status': project.status || 'N/A',
+        'Current Queue Status': project.currentQueueStatus || 'N/A'
+      }));
+
+      // Create workbook and worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Queue Status');
+
+      // Generate filename with timestamp
+      const filename = `Queue_Status_Management_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Write and download
+      XLSX.writeFile(wb, filename);
+      toast.success(`Exported ${exportData.length} records to Excel`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      toast.error('Failed to export to Excel');
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!canPublish()) {
+      toast.error('Please select at least one project and choose a Queue Status to update');
+      return;
+    }
+
+    // Prepare updates for selected projects
+    const updates = selectedProjects
+      .map(projectId => {
+        const project = contributorProjects.find(p => p.id === projectId);
+        if (!project) return null;
+        
+        const currentStatus = project.currentQueueStatus || null;
+        let updateStatus;
+        
+        // Use bulk status if set, otherwise use individual update
+        if (bulkQueueStatus && bulkQueueStatus !== '') {
+          updateStatus = bulkQueueStatus === '--None--' ? null : bulkQueueStatus;
+        } else {
+          updateStatus = queueStatusUpdates[projectId] !== undefined 
+            ? queueStatusUpdates[projectId] 
+            : currentStatus;
+        }
+        
+        // Only include if status has changed
+        if (currentStatus !== updateStatus) {
+          return {
+            projectId: projectId,
+            queueStatus: updateStatus,
+            currentStatus: currentStatus // Include for server-side validation
+          };
+        }
+        return null;
+      })
+      .filter(update => update !== null);
+
+    if (updates.length === 0) {
+      toast.error('No changes to publish');
+      return;
+    }
+
+    setPublishing(true);
+    try {
+      const response = await apiClient.post('/queue-status-management/update-queue-status', { updates });
+      if (response.data.success) {
+        toast.success(`Successfully published ${response.data.updatedCount} project(s) to Salesforce`);
+        setSelectedProjects([]);
+        setQueueStatusUpdates({});
+        setBulkQueueStatus('');
+        fetchContributorProjects();
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || 'Failed to publish queue status updates';
+      toast.error(errorMessage);
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="dashboard-layout">
+        <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+        <div className="queue-status-management" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="loading-container">
+            <Loader className="spinning" size={24} />
+            <p>Loading queue status management data...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      
+      <div className="queue-status-management" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease' }}>
+        <div className="queue-status-management-container">
+          <div className="queue-status-management-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button 
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">Queue Status Management</h1>
+                  <p className="page-subtitle">Manage Queue Status for Contributor Projects</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <BookmarkButton pageName="Queue Status Management" pageType="page" />
+                <div className="user-profile">
+                  <div className="user-avatar">
+                    {(user?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="user-name">{user?.email || 'User'}</span>
+                  <button className="logout-btn" onClick={logout} title="Logout">
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab Navigation */}
+          <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', borderBottom: '2px solid var(--border-color)' }}>
+            <button
+              onClick={() => setActiveTab('management')}
+              style={{
+                padding: '12px 20px',
+                background: 'none',
+                border: 'none',
+                borderBottom: activeTab === 'management' ? '2px solid #0176d3' : '2px solid transparent',
+                color: activeTab === 'management' ? '#0176d3' : '#666',
+                fontWeight: activeTab === 'management' ? '600' : '400',
+                cursor: 'pointer',
+                fontSize: '14px',
+                marginBottom: '-2px'
+              }}
+            >
+              Management
+            </button>
+            <button
+              onClick={() => setActiveTab('dashboard')}
+              style={{
+                padding: '12px 20px',
+                background: 'none',
+                border: 'none',
+                borderBottom: activeTab === 'dashboard' ? '2px solid #0176d3' : '2px solid transparent',
+                color: activeTab === 'dashboard' ? '#0176d3' : '#666',
+                fontWeight: activeTab === 'dashboard' ? '600' : '400',
+                cursor: 'pointer',
+                fontSize: '14px',
+                marginBottom: '-2px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <BarChart3 size={16} />
+              Analytics
+            </button>
+            <button
+              onClick={() => setActiveTab('schedule')}
+              style={{
+                padding: '12px 20px',
+                background: 'none',
+                border: 'none',
+                borderBottom: activeTab === 'schedule' ? '2px solid #0176d3' : '2px solid transparent',
+                color: activeTab === 'schedule' ? '#0176d3' : '#666',
+                fontWeight: activeTab === 'schedule' ? '600' : '400',
+                cursor: 'pointer',
+                fontSize: '14px',
+                marginBottom: '-2px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Clock size={16} />
+              Schedule & Automation
+            </button>
+          </div>
+
+          {/* Dashboard Tab */}
+          {activeTab === 'dashboard' && (
+            <QueueStatusDashboard />
+          )}
+
+          {/* Schedule Tab */}
+          {activeTab === 'schedule' && (
+            <QueueStatusScheduleManager />
+          )}
+
+          {/* Management Tab */}
+          {activeTab === 'management' && (
+          <div className="contributor-projects-list">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '16px' }}>
+              <h2 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
+                Contributor Projects ({filteredContributorProjects.length})
+              </h2>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ position: 'relative', minWidth: '250px', maxWidth: '400px' }}>
+                  <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#666', zIndex: 1, pointerEvents: 'none' }} />
+                  <input
+                    type="text"
+                    placeholder="Search contributor projects..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={{
+                      paddingLeft: '36px',
+                      fontSize: '14px',
+                      padding: '10px 16px 10px 36px',
+                      width: '100%',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      background: 'var(--surface)',
+                      color: 'var(--text-primary)',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  style={{
+                    fontSize: '14px',
+                    padding: '10px 16px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--surface)',
+                    color: 'var(--text-primary)',
+                    minWidth: '150px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="">All Status</option>
+                  {Array.from(new Set(contributorProjects.map(p => p.status).filter(Boolean))).sort().map(status => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+                <select
+                  value={queueStatusFilter}
+                  onChange={(e) => setQueueStatusFilter(e.target.value)}
+                  style={{
+                    fontSize: '14px',
+                    padding: '10px 16px',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--surface)',
+                    color: 'var(--text-primary)',
+                    minWidth: '180px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <option value="">All Queue Status</option>
+                  <option value="--None--">--None--</option>
+                  {Array.from(new Set(contributorProjects.map(p => p.currentQueueStatus).filter(Boolean))).sort().map(queueStatus => (
+                    <option key={queueStatus} value={queueStatus}>{queueStatus}</option>
+                  ))}
+                </select>
+                <button
+                  className="btn-secondary"
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+                  title="Refresh table"
+                >
+                  <RefreshCw size={16} className={loading ? 'spinning' : ''} />
+                  Refresh
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={handleExportToExcel}
+                  disabled={filteredContributorProjects.length === 0}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+                  title="Export table data to Excel"
+                >
+                  <Download size={16} />
+                  Export to Excel
+                </button>
+                {selectedProjects.length >= 2 && (() => {
+                  // Get common allowed transitions for all selected projects
+                  const getCommonAllowedTransitions = () => {
+                    if (selectedProjects.length === 0) return queueStatusOptions;
+                    
+                    const transitionsPerProject = selectedProjects.map(projectId => {
+                      const project = contributorProjects.find(p => p.id === projectId);
+                      const currentStatus = project?.currentQueueStatus || null;
+                      return getAllowedTransitions(currentStatus);
+                    });
+                    
+                    // Find intersection of all allowed transitions
+                    if (transitionsPerProject.length === 0) return queueStatusOptions;
+                    return transitionsPerProject.reduce((common, transitions) => 
+                      common.filter(t => transitions.includes(t))
+                    );
+                  };
+                  
+                  const commonTransitions = getCommonAllowedTransitions();
+                  
+                  return (
+                  <div style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: '8px', 
+                    padding: '0 8px',
+                    margin: '0 4px',
+                    flexShrink: 0,
+                    whiteSpace: 'nowrap'
+                  }}>
+                    <label htmlFor="bulk-queue-status-select" style={{ 
+                      fontSize: '13px', 
+                      fontWeight: '500', 
+                      whiteSpace: 'nowrap', 
+                      color: 'var(--text-primary)',
+                      margin: 0
+                    }}>
+                      Update Queue Status:
+                    </label>
+                    <select
+                      id="bulk-queue-status-select"
+                      value={bulkQueueStatus}
+                      onChange={(e) => handleBulkQueueStatusChange(e.target.value)}
+                      style={{
+                        fontSize: '14px',
+                        padding: '8px 12px',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-primary)',
+                        minWidth: '180px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value="">--Select--</option>
+                      {commonTransitions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                    {commonTransitions.length < queueStatusOptions.length && (
+                      <div style={{ fontSize: '11px', color: '#ff9800', marginLeft: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                        <AlertCircle size={12} />
+                        Some transitions may not be valid for all selected projects
+                      </div>
+                    )}
+                  </div>
+                  );
+                })()}
+                <button
+                  className="btn-primary"
+                  onClick={handlePublish}
+                  disabled={!canPublish() || publishing}
+                  style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}
+                  title={!canPublish() ? 'Please select at least one project and choose a Queue Status' : 'Publish selected projects to Salesforce'}
+                >
+                  <Send size={16} />
+                  {publishing ? 'Publishing...' : selectedProjects.length > 0 ? `Publish ${selectedProjects.length} Selected` : 'Publish Selected'}
+                </button>
+              </div>
+            </div>
+            
+            {filteredContributorProjects.length === 0 ? (
+              <div className="no-projects">
+                <p>No contributor projects found that require queue status update</p>
+              </div>
+            ) : (
+              <div className="projects-table" ref={tableContainerRef}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedProjects.length === filteredContributorProjects.length && filteredContributorProjects.length > 0}
+                          onChange={(e) => handleSelectAll(e.target.checked)}
+                        />
+                      </th>
+                      <th>Contributor Project Name</th>
+                      <th>Project</th>
+                      <th>Status</th>
+                      <th>Current Queue Status</th>
+                      <th>Update Queue Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredContributorProjects.map((project) => {
+                      const currentStatus = project.currentQueueStatus || null;
+                      // Use bulk status if set and project is selected, otherwise use individual update
+                      let updateStatus;
+                      if (bulkQueueStatus && bulkQueueStatus !== '' && selectedProjects.includes(project.id)) {
+                        updateStatus = bulkQueueStatus === '--None--' ? null : bulkQueueStatus;
+                      } else {
+                        updateStatus = queueStatusUpdates[project.id] !== undefined 
+                          ? queueStatusUpdates[project.id] 
+                          : currentStatus;
+                      }
+                      const hasChange = currentStatus !== updateStatus;
+                      
+                      return (
+                        <tr key={project.id} style={{ background: selectedProjects.includes(project.id) && hasChange ? 'var(--bg-secondary)' : 'transparent' }}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={selectedProjects.includes(project.id)}
+                              onChange={() => toggleSelection(project.id)}
+                            />
+                          </td>
+                          <td>{project.contributorProjectName || 'N/A'}</td>
+                          <td>{project.project || 'N/A'}</td>
+                          <td>{project.status || 'N/A'}</td>
+                          <td>{currentStatus || '--None--'}</td>
+                          <td>
+                            <select
+                              value={updateStatus || '--None--'}
+                              onChange={(e) => handleQueueStatusChange(project.id, e.target.value)}
+                              style={{
+                                fontSize: '13px',
+                                padding: '6px 8px',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: 'var(--radius-md)',
+                                background: 'var(--surface)',
+                                color: 'var(--text-primary)',
+                                width: '100%',
+                                minWidth: '150px'
+                              }}
+                              title={getTransitionDescription(currentStatus)}
+                            >
+                              {getAllowedTransitions(currentStatus).map((option) => (
+                                <option key={option} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                            {!isValidTransition(currentStatus, updateStatus || '--None--') && (
+                              <div style={{ fontSize: '11px', color: '#d32f2f', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                <AlertCircle size={12} />
+                                Invalid transition
+                              </div>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                {/* Infinite scroll trigger and loading indicator */}
+                {hasMoreProjects && (
+                  <>
+                    {!loadingMore && (
+                      <div
+                        ref={infiniteScrollRef}
+                        style={{ 
+                          height: '50px', 
+                          width: '100%', 
+                          marginTop: '20px',
+                          display: 'flex',
+                          justifyContent: 'center',
+                          alignItems: 'center'
+                        }}
+                      >
+                        <div style={{ 
+                          fontSize: '12px', 
+                          color: 'var(--text-secondary)',
+                          padding: '10px'
+                        }}>
+                          Scroll for more...
+                        </div>
+                      </div>
+                    )}
+                    {loadingMore && (
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'center', 
+                        alignItems: 'center', 
+                        padding: '20px',
+                        gap: '12px'
+                      }}>
+                        <Loader className="spinner" size={20} style={{ color: '#0176d3' }} />
+                        <span style={{ color: 'var(--text-primary)', fontSize: '14px' }}>Loading more contributor projects...</span>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default QueueStatusManagement;
+

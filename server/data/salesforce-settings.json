@@ -1,0 +1,10 @@
+{
+  "salesforceUrl": "https://appen-mercury--staging.sandbox.lightning.force.com/",
+  "username": "8a7e3004934a6f9941819f23d235aec6:e58509468c7636865bc49c041e4f2638ac3c1d093c67b9630eb059bb79604d0a04001a3a6b762c303b38ec9447ce26b8",
+  "password": "f1bf88a8c3d04e296dd14bca93c241ae:a3a504581d65c854935a404c39603fb5",
+  "securityToken": "5ec95503b24d41a045106faa33f2f132:18d7aaf1d6bb54bd9466f4edfdaa9b7fced12872b2aab7b15392ba953e73ca7f",
+  "domain": "login",
+  "loginUrl": "https://appen-mercury--staging.sandbox.lightning.force.com/",
+  "updatedAt": "2025-11-09T09:12:36.587Z",
+  "updatedBy": "admin@example.com"
+}

@@ -1,0 +1,72 @@
+.dual-productivity-cell {
+  padding: 0;
+  margin: 0;
+}
+
+.productivity-data {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.productivity-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  min-height: 24px;
+}
+
+.productivity-row:nth-child(odd) {
+  background: #f9fafb;
+}
+
+.productivity-row:nth-child(even) {
+  background: #ffffff;
+}
+
+.productivity-label {
+  font-size: 11px;
+  color: #6b7280;
+  font-style: italic;
+  font-weight: 400;
+  flex: 0 0 auto;
+  margin-right: 12px;
+}
+
+.productivity-value {
+  font-size: 13px;
+  color: #111827;
+  font-weight: 500;
+  text-align: right;
+  flex: 1;
+}
+
+.productivity-value:empty::before {
+  content: '-';
+  color: #9ca3af;
+}
+
+/* Productivity header styling */
+.productivity-header {
+  background: #f3f4f6 !important;
+  text-align: center;
+  font-weight: 600;
+  color: #002329;
+}
+
+.productivity-sub-header {
+  background: #f3f4f6 !important;
+  text-align: center;
+  font-weight: 600;
+  font-size: 11px;
+  color: #002329;
+  padding: 8px 12px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.productivity-cell {
+  padding: 0 !important;
+  vertical-align: top;
+  border-bottom: 1px solid #f3f4f6;
+}

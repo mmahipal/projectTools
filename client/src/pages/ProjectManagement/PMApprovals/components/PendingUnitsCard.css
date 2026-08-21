@@ -1,0 +1,43 @@
+.pending-units-card {
+  background: #fff;
+  border-radius: 6px;
+  padding: 12px 16px;
+  border: 1px solid #e5e7eb;
+  flex: 1;
+  min-width: 200px;
+}
+
+.pending-units-card .card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pending-units-card .card-icon {
+  color: #08979C;
+}
+
+.pending-units-card .card-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0;
+}
+
+.pending-units-card .card-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #002329;
+}
+
+.pending-units-card .card-loading {
+  padding: 20px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+

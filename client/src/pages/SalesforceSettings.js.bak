@@ -1,0 +1,614 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import { Save, TestTube, Eye, EyeOff, CheckCircle, XCircle, Menu, LogOut } from 'lucide-react';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import '../styles/SalesforceSettings.css';
+import '../styles/GlobalHeader.css';
+
+const SalesforceSettings = ({ asTab = false }) => {
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testingProjectCreation, setTestingProjectCreation] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showToken, setShowToken] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState(null);
+  const [projectCreationTestStatus, setProjectCreationTestStatus] = useState(null);
+  const [settings, setSettings] = useState({
+    salesforceUrl: '',
+    username: '',
+    password: '',
+    securityToken: '',
+    domain: ''
+  });
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    try {
+      const response = await apiClient.get('/salesforce/settings');
+      if (response.data) {
+        setSettings({
+          salesforceUrl: response.data.salesforceUrl || response.data.loginUrl || '',
+          username: response.data.username || '',
+          password: response.data.password || '',
+          securityToken: response.data.securityToken || '',
+          domain: response.data.domain || ''
+        });
+      }
+    } catch (error) {
+      // Settings not found or error, use empty defaults
+      console.log('No existing settings found, using empty defaults');
+      setSettings({
+        salesforceUrl: '',
+        username: '',
+        password: '',
+        securityToken: '',
+        domain: ''
+      });
+    }
+  };
+
+  const handleChange = (field, value) => {
+    setSettings(prev => ({
+      ...prev,
+      [field]: value
+    }));
+    // Clear connection status when settings change
+    if (connectionStatus) {
+      setConnectionStatus(null);
+    }
+  };
+
+  const handleSalesforceUrlChange = (url) => {
+    handleChange('salesforceUrl', url);
+    // Auto-detect domain based on URL
+    if (url.includes('test.salesforce.com')) {
+      handleChange('domain', 'test');
+    } else {
+      handleChange('domain', 'login');
+    }
+  };
+
+  const testConnection = async () => {
+    // Validate required fields before sending
+    const trimmedUrl = settings.salesforceUrl?.trim();
+    if (!trimmedUrl || !settings.username?.trim() || !settings.password?.trim() || !settings.securityToken?.trim()) {
+      toast.error('Please fill in all required fields (Salesforce URL, Username, Password, and Security Token)');
+      return;
+    }
+    
+    // Validate URL format
+    if (!trimmedUrl.startsWith('https://')) {
+      toast.error('Salesforce URL must start with https:// (e.g., https://login.salesforce.com)');
+      return;
+    }
+    
+    // Accept URLs with any of these Salesforce domain patterns:
+    // - *.salesforce.com (standard domains)
+    // - *.lightning.force.com (Lightning domains)
+    // - *.force.com (force.com domains)
+    // - *.my.salesforce.com (My Domain)
+    const urlLower = trimmedUrl.toLowerCase();
+    const isValidSalesforceUrl = urlLower.includes('salesforce.com') || 
+                                 urlLower.includes('lightning.force.com') || 
+                                 urlLower.includes('.force.com');
+    
+    if (!isValidSalesforceUrl) {
+      toast.error('Invalid Salesforce URL. Must be a Salesforce domain (e.g., https://login.salesforce.com, https://test.salesforce.com, or https://yourdomain.lightning.force.com)');
+      return;
+    }
+    
+    console.log('Client-side validation passed. URL:', trimmedUrl);
+
+    setTesting(true);
+    setConnectionStatus(null);
+    
+    try {
+      const response = await apiClient.post('/salesforce/test', {
+        salesforceUrl: trimmedUrl,
+        username: settings.username.trim(),
+        password: settings.password.trim(),
+        securityToken: settings.securityToken.trim(),
+        domain: settings.domain
+      });
+
+      if (response.data.success) {
+        setConnectionStatus({
+          success: true,
+          message: 'Connection successful!',
+          userInfo: response.data.userInfo
+        });
+        toast.success('Salesforce connection test successful!');
+      } else {
+        setConnectionStatus({
+          success: false,
+          message: response.data.message || 'Connection failed'
+        });
+        toast.error('Salesforce connection test failed');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Connection test failed';
+      setConnectionStatus({
+        success: false,
+        message: errorMessage
+      });
+      toast.error(errorMessage);
+      console.error('Salesforce test connection error:', error.response?.data || error);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const testProjectCreation = async () => {
+    if (!settings.salesforceUrl || !settings.username || !settings.password || !settings.securityToken) {
+      toast.error('Please fill in all required fields and save settings first');
+      return;
+    }
+
+    setTestingProjectCreation(true);
+    setProjectCreationTestStatus(null);
+    
+    try {
+      const response = await apiClient.post('/salesforce/test-project-creation', {});
+
+      if (response.data.success) {
+        setProjectCreationTestStatus({
+          success: true,
+          message: 'Project creation API test successful!',
+          testResults: response.data.testResults
+        });
+        toast.success('Project creation API test successful!');
+      } else {
+        setProjectCreationTestStatus({
+          success: false,
+          message: response.data.error || 'Project creation API test failed'
+        });
+        toast.error('Project creation API test failed');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'Project creation API test failed';
+      setProjectCreationTestStatus({
+        success: false,
+        message: errorMessage,
+        details: error.response?.data?.details
+      });
+      toast.error(errorMessage);
+      console.error('Salesforce project creation test error:', error.response?.data || error);
+    } finally {
+      setTestingProjectCreation(false);
+    }
+  };
+
+  const saveSettings = async () => {
+    if (!settings.salesforceUrl || !settings.username || !settings.password || !settings.securityToken) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setLoading(true);
+    
+    try {
+      await apiClient.post('/salesforce/settings', settings);
+      
+      toast.success('Salesforce settings saved successfully!');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'Error saving settings');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (asTab) {
+    // Render as tab component (no sidebar/header)
+    return (
+      <div style={{ padding: '24px' }}>
+        <div className="settings-content">
+          <div className="settings-section">
+            <div className="section-header">
+              <h2>Connection Settings</h2>
+              <p className="section-description">
+                Configure your Salesforce connection credentials. These will be stored securely and used for project creation.
+              </p>
+            </div>
+
+            <div className="settings-form">
+              <div className="form-group">
+                <label>Salesforce URL *</label>
+                <input
+                  type="url"
+                  value={settings.salesforceUrl}
+                  onChange={(e) => handleSalesforceUrlChange(e.target.value)}
+                  placeholder="https://login.salesforce.com or https://yourdomain.lightning.force.com"
+                  pattern="https://.*\.(salesforce|force)\.com"
+                />
+                <p className="field-description">
+                  Enter your Salesforce login URL (e.g., https://login.salesforce.com for Production, https://test.salesforce.com for Sandbox, or https://yourdomain.lightning.force.com for Lightning). Do not include /services/ path.
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label>Username *</label>
+                <input
+                  type="text"
+                  value={settings.username}
+                  onChange={(e) => handleChange('username', e.target.value)}
+                  placeholder="your-email@example.com"
+                />
+                <p className="field-description">Your Salesforce username (email address)</p>
+              </div>
+
+              <div className="form-group">
+                <label>Password *</label>
+                <div className="password-input-group">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={settings.password}
+                    onChange={(e) => handleChange('password', e.target.value)}
+                    placeholder="Enter your password"
+                  />
+                  <button
+                    type="button"
+                    className="toggle-password"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <p className="field-description">Your Salesforce password</p>
+              </div>
+
+              <div className="form-group">
+                <label>Security Token *</label>
+                <div className="password-input-group">
+                  <input
+                    type={showToken ? 'text' : 'password'}
+                    value={settings.securityToken}
+                    onChange={(e) => handleChange('securityToken', e.target.value)}
+                    placeholder="Enter your security token"
+                  />
+                  <button
+                    type="button"
+                    className="toggle-password"
+                    onClick={() => setShowToken(!showToken)}
+                  >
+                    {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <p className="field-description">
+                  Your Salesforce security token. You can reset it from your Salesforce profile settings.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {connectionStatus && (
+            <div className={`connection-status ${connectionStatus.success ? 'success' : 'error'}`}>
+              <div className="status-header">
+                {connectionStatus.success ? (
+                  <CheckCircle size={24} className="status-icon" />
+                ) : (
+                  <XCircle size={24} className="status-icon" />
+                )}
+                <h3>{connectionStatus.success ? 'Connection Successful' : 'Connection Failed'}</h3>
+              </div>
+              <p className="status-message">{connectionStatus.message}</p>
+              {connectionStatus.success && connectionStatus.userInfo && (
+                <div className="user-info">
+                  <p><strong>Name:</strong> {connectionStatus.userInfo.Name}</p>
+                  <p><strong>Email:</strong> {connectionStatus.userInfo.Email}</p>
+                  <p><strong>User ID:</strong> {connectionStatus.userInfo.Id}</p>
+                  <p><strong>Salesforce URL:</strong> {settings.salesforceUrl}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {projectCreationTestStatus && (
+            <div className={`connection-status ${projectCreationTestStatus.success ? 'success' : 'error'}`}>
+              <div className="status-header">
+                {projectCreationTestStatus.success ? (
+                  <CheckCircle size={24} className="status-icon" />
+                ) : (
+                  <XCircle size={24} className="status-icon" />
+                )}
+                <h3>{projectCreationTestStatus.success ? 'Project Creation API Test Successful' : 'Project Creation API Test Failed'}</h3>
+              </div>
+              <p className="status-message">{projectCreationTestStatus.message}</p>
+              {projectCreationTestStatus.success && projectCreationTestStatus.testResults && (
+                <div className="user-info">
+                  <p><strong>Object Type:</strong> {projectCreationTestStatus.testResults.objectType}</p>
+                  <p><strong>Object Exists:</strong> {projectCreationTestStatus.testResults.objectExists ? 'Yes' : 'No'}</p>
+                  <p><strong>Fields Valid:</strong> {projectCreationTestStatus.testResults.fieldsValid ? 'Yes' : 'No'}</p>
+                  {projectCreationTestStatus.testResults.validationErrors && projectCreationTestStatus.testResults.validationErrors.length > 0 && (
+                    <div>
+                      <p><strong>Validation Errors:</strong></p>
+                      <ul>
+                        {projectCreationTestStatus.testResults.validationErrors.map((error, index) => (
+                          <li key={index}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {projectCreationTestStatus.testResults.availableFields && projectCreationTestStatus.testResults.availableFields.length > 0 && (
+                    <div>
+                      <p><strong>Available Fields (first 20):</strong></p>
+                      <p style={{ fontSize: '12px', color: '#666' }}>{projectCreationTestStatus.testResults.availableFields.join(', ')}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {!projectCreationTestStatus.success && projectCreationTestStatus.details && (
+                <p style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>Details: {projectCreationTestStatus.details}</p>
+              )}
+            </div>
+          )}
+
+          <div className="settings-actions">
+            <button
+              onClick={testConnection}
+              disabled={testing || !settings.salesforceUrl || !settings.username || !settings.password || !settings.securityToken}
+              className="btn-test"
+            >
+              <TestTube size={20} />
+              {testing ? 'Testing Connection...' : 'Test Connection'}
+            </button>
+            <button
+              onClick={testProjectCreation}
+              disabled={testingProjectCreation || !settings.salesforceUrl || !settings.username || !settings.password || !settings.securityToken}
+              className="btn-test"
+              style={{ marginLeft: '10px' }}
+            >
+              <TestTube size={20} />
+              {testingProjectCreation ? 'Testing Project Creation...' : 'Test Project Creation API'}
+            </button>
+            <button
+              onClick={saveSettings}
+              disabled={loading || !settings.salesforceUrl || !settings.username || !settings.password || !settings.securityToken}
+              className="btn-primary"
+            >
+              <Save size={20} />
+              {loading ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+
+          <div className="info-box">
+            <h3>Security Note</h3>
+            <p>
+              Your Salesforce credentials are encrypted and stored securely. They will be used only for 
+              establishing connections to Salesforce when creating projects. Never share your credentials with anyone.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Full page render (with sidebar and header)
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      
+      <div className="salesforce-settings" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease' }}>
+        <div className="settings-container">
+          <div className="settings-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button 
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">Salesforce Configuration</h1>
+                  <p className="page-subtitle">Configure your Salesforce connection settings</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <div className="user-profile">
+                  <div className="user-avatar">
+                    {(user?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="user-name">{user?.email || 'User'}</span>
+                  <button className="logout-btn" onClick={logout} title="Logout">
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="settings-content">
+            <div className="settings-section">
+              <div className="section-header">
+                <h2>Connection Settings</h2>
+                <p className="section-description">
+                  Configure your Salesforce connection credentials. These will be stored securely and used for project creation.
+                </p>
+              </div>
+
+              <div className="settings-form">
+                <div className="form-group">
+                  <label>Salesforce URL *</label>
+                  <input
+                    type="url"
+                    value={settings.salesforceUrl}
+                    onChange={(e) => handleSalesforceUrlChange(e.target.value)}
+                    placeholder="https://login.salesforce.com or https://yourdomain.lightning.force.com"
+                    pattern="https://.*\.(salesforce|force)\.com"
+                  />
+                  <p className="field-description">
+                    Enter your Salesforce login URL (e.g., https://login.salesforce.com for Production, https://test.salesforce.com for Sandbox, or https://yourdomain.lightning.force.com for Lightning). Do not include /services/ path.
+                  </p>
+                </div>
+
+                <div className="form-group">
+                  <label>Username *</label>
+                  <input
+                    type="text"
+                    value={settings.username}
+                    onChange={(e) => handleChange('username', e.target.value)}
+                    placeholder="your-email@example.com"
+                  />
+                  <p className="field-description">Your Salesforce username (email address)</p>
+                </div>
+
+                <div className="form-group">
+                  <label>Password *</label>
+                  <div className="password-input-group">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={settings.password}
+                      onChange={(e) => handleChange('password', e.target.value)}
+                      placeholder="Enter your password"
+                    />
+                    <button
+                      type="button"
+                      className="toggle-password"
+                      onClick={() => setShowPassword(!showPassword)}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  <p className="field-description">Your Salesforce password</p>
+                </div>
+
+                <div className="form-group">
+                  <label>Security Token *</label>
+                  <div className="password-input-group">
+                    <input
+                      type={showToken ? 'text' : 'password'}
+                      value={settings.securityToken}
+                      onChange={(e) => handleChange('securityToken', e.target.value)}
+                      placeholder="Enter your security token"
+                    />
+                    <button
+                      type="button"
+                      className="toggle-password"
+                      onClick={() => setShowToken(!showToken)}
+                    >
+                      {showToken ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
+                  <p className="field-description">
+                    Your Salesforce security token. You can reset it from your Salesforce profile settings.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {connectionStatus && (
+              <div className={`connection-status ${connectionStatus.success ? 'success' : 'error'}`}>
+                <div className="status-header">
+                  {connectionStatus.success ? (
+                    <CheckCircle size={24} className="status-icon" />
+                  ) : (
+                    <XCircle size={24} className="status-icon" />
+                  )}
+                  <h3>{connectionStatus.success ? 'Connection Successful' : 'Connection Failed'}</h3>
+                </div>
+                <p className="status-message">{connectionStatus.message}</p>
+                {connectionStatus.success && connectionStatus.userInfo && (
+                  <div className="user-info">
+                    <p><strong>Name:</strong> {connectionStatus.userInfo.Name}</p>
+                    <p><strong>Email:</strong> {connectionStatus.userInfo.Email}</p>
+                    <p><strong>User ID:</strong> {connectionStatus.userInfo.Id}</p>
+                    <p><strong>Salesforce URL:</strong> {settings.salesforceUrl}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {projectCreationTestStatus && (
+              <div className={`connection-status ${projectCreationTestStatus.success ? 'success' : 'error'}`}>
+                <div className="status-header">
+                  {projectCreationTestStatus.success ? (
+                    <CheckCircle size={24} className="status-icon" />
+                  ) : (
+                    <XCircle size={24} className="status-icon" />
+                  )}
+                  <h3>{projectCreationTestStatus.success ? 'Project Creation API Test Successful' : 'Project Creation API Test Failed'}</h3>
+                </div>
+                <p className="status-message">{projectCreationTestStatus.message}</p>
+                {projectCreationTestStatus.success && projectCreationTestStatus.testResults && (
+                  <div className="user-info">
+                    <p><strong>Object Type:</strong> {projectCreationTestStatus.testResults.objectType}</p>
+                    <p><strong>Object Exists:</strong> {projectCreationTestStatus.testResults.objectExists ? 'Yes' : 'No'}</p>
+                    <p><strong>Fields Valid:</strong> {projectCreationTestStatus.testResults.fieldsValid ? 'Yes' : 'No'}</p>
+                    {projectCreationTestStatus.testResults.validationErrors && projectCreationTestStatus.testResults.validationErrors.length > 0 && (
+                      <div>
+                        <p><strong>Validation Errors:</strong></p>
+                        <ul>
+                          {projectCreationTestStatus.testResults.validationErrors.map((error, index) => (
+                            <li key={index}>{error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {projectCreationTestStatus.testResults.availableFields && projectCreationTestStatus.testResults.availableFields.length > 0 && (
+                      <div>
+                        <p><strong>Available Fields (first 20):</strong></p>
+                        <p style={{ fontSize: '12px', color: '#666' }}>{projectCreationTestStatus.testResults.availableFields.join(', ')}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+                {!projectCreationTestStatus.success && projectCreationTestStatus.details && (
+                  <p style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>Details: {projectCreationTestStatus.details}</p>
+                )}
+              </div>
+            )}
+
+            <div className="settings-actions">
+              <button
+                onClick={testConnection}
+                disabled={testing || !settings.salesforceUrl || !settings.username || !settings.password || !settings.securityToken}
+                className="btn-test"
+              >
+                <TestTube size={20} />
+                {testing ? 'Testing Connection...' : 'Test Connection'}
+              </button>
+              <button
+                onClick={testProjectCreation}
+                disabled={testingProjectCreation || !settings.salesforceUrl || !settings.username || !settings.password || !settings.securityToken}
+                className="btn-test"
+                style={{ marginLeft: '10px' }}
+              >
+                <TestTube size={20} />
+                {testingProjectCreation ? 'Testing Project Creation...' : 'Test Project Creation API'}
+              </button>
+              <button
+                onClick={saveSettings}
+                disabled={loading || !settings.salesforceUrl || !settings.username || !settings.password || !settings.securityToken}
+                className="btn-primary"
+              >
+                <Save size={20} />
+                {loading ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+
+            <div className="info-box">
+              <h3>Security Note</h3>
+              <p>
+                Your Salesforce credentials are encrypted and stored securely. They will be used only for 
+                establishing connections to Salesforce when creating projects. Never share your credentials with anyone.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default SalesforceSettings;
+

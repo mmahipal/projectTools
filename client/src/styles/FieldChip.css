@@ -1,0 +1,73 @@
+/* Field Chip - Scoped Styles */
+
+.field-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  background: #f0fdfa;
+  border: 1px solid #08979C;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: 'Poppins', sans-serif;
+  position: relative;
+}
+
+.field-chip-draggable {
+  cursor: move;
+  cursor: grab;
+}
+
+.field-chip-draggable:active {
+  cursor: grabbing;
+}
+
+.chip-drag-handle {
+  display: flex;
+  align-items: center;
+  color: #64748b;
+  cursor: grab;
+  padding: 2px;
+}
+
+.chip-drag-handle:active {
+  cursor: grabbing;
+}
+
+.chip-label {
+  color: #002329;
+  font-weight: 500;
+  flex: 1;
+}
+
+.chip-remove {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: #08979C;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+
+.chip-remove:hover {
+  color: #dc2626;
+}
+
+/* Field chip wrapper for drag and drop */
+.field-chip-wrapper {
+  position: relative;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.field-chip-wrapper.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
+
+.field-chip-wrapper.drag-over {
+  border-top: 2px solid #08979C;
+  margin-top: 2px;
+}
+

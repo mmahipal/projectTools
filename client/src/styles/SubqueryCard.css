@@ -1,0 +1,36 @@
+/* Subquery Card - Scoped Styles */
+
+.subquery-card {
+  border-left: 4px solid #f59e0b;
+  margin-left: 24px;
+  position: relative;
+  background: #fffbeb;
+}
+
+.subquery-card::before {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  width: 20px;
+  height: 2px;
+  background: #d9d9d9;
+  transform: translateY(-50%);
+}
+
+.subquery-card::after {
+  content: '';
+  position: absolute;
+  left: -24px;
+  top: 0;
+  width: 2px;
+  height: 50%;
+  background: #d9d9d9;
+}
+
+.subquery-card .card-header {
+  background: #fef3c7;
+}
+
+
+

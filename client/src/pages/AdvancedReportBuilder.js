@@ -1,0 +1,195 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import { Menu, FileText, BarChart3, Save, Eye } from 'lucide-react';
+import UserProfileDropdown from '../components/UserProfileDropdown/UserProfileDropdown';
+import SaveReportModal from '../components/AdvancedReportBuilder/SaveReportModal';
+import toast from 'react-hot-toast';
+import AdvancedBuilderCanvas from '../components/AdvancedReportBuilder/AdvancedBuilderCanvas';
+import AdvancedReportsList from '../components/AdvancedReportBuilder/AdvancedReportsList';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+import '../styles/AdvancedReportBuilder.css';
+
+const AdvancedReportBuilder = () => {
+  // const { user, logout } = useAuth(); // Unused - kept for potential future use
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [activeTab, setActiveTab] = useState('builder'); // 'builder' or 'reports'
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [reportToEdit, setReportToEdit] = useState(null);
+  const builderCanvasRef = useRef(null);
+
+  // Prevent browser alerts from unhandled errors
+  useEffect(() => {
+    const handleError = (event) => {
+      event.preventDefault();
+      console.error('Unhandled error:', event.error);
+      toast.error('An error occurred. Please check the console for details.');
+    };
+
+    const handleRejection = (event) => {
+      event.preventDefault();
+      console.error('Unhandled promise rejection:', event.reason);
+      toast.error('An error occurred. Please check the console for details.');
+    };
+
+    window.addEventListener('error', handleError);
+    window.addEventListener('unhandledrejection', handleRejection);
+
+    return () => {
+      window.removeEventListener('error', handleError);
+      window.removeEventListener('unhandledrejection', handleRejection);
+    };
+  }, []);
+
+  const handleSave = (reportConfig) => {
+    try {
+      // Load existing reports
+      const existing = localStorage.getItem('advanced_saved_reports');
+      const reports = existing ? JSON.parse(existing) : [];
+      
+      // Check if updating existing or creating new
+      const existingIndex = reports.findIndex(r => r.id === reportConfig.id);
+      if (existingIndex >= 0) {
+        reports[existingIndex] = reportConfig;
+        toast.success('Report updated successfully!');
+      } else {
+        reports.push(reportConfig);
+        toast.success('Report saved successfully!');
+      }
+      
+      localStorage.setItem('advanced_saved_reports', JSON.stringify(reports));
+      
+      // Switch to Reports tab to show the saved report
+      setActiveTab('reports');
+    } catch (error) {
+      console.error('Error saving report:', error);
+      toast.error('Failed to save report');
+    }
+  };
+
+  const getReportConfig = () => {
+    // Get report config from builder canvas
+    if (builderCanvasRef.current && builderCanvasRef.current.getReportConfig) {
+      return builderCanvasRef.current.getReportConfig();
+    }
+    return null;
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <div 
+        style={{ 
+          marginLeft: `${sidebarWidth}px`, 
+          width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 80px)', 
+          transition: 'margin-left 0.3s ease' 
+        }}
+      >
+        <div className="advanced-report-builder-container">
+          {/* Header */}
+          <div className="advanced-report-builder-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">Advanced Report Builder</h1>
+                  <p className="page-subtitle">Create reports with drag-and-drop interface</p>
+                </div>
+              </div>
+              <div className="header-right">
+                <div className="header-user-profile">
+                  <UserProfileDropdown />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="advanced-builder-tabs-container">
+            <div className="advanced-builder-tabs">
+              <button
+                className={`advanced-tab-button ${activeTab === 'builder' ? 'active' : ''}`}
+                onClick={() => setActiveTab('builder')}
+              >
+                <FileText size={16} /> Builder
+              </button>
+              <button
+                className={`advanced-tab-button ${activeTab === 'reports' ? 'active' : ''}`}
+                onClick={() => setActiveTab('reports')}
+              >
+                <BarChart3 size={16} /> Reports
+              </button>
+            </div>
+            {activeTab === 'builder' && (
+              <div className="tabs-actions">
+                <button
+                  className="preview-report-btn"
+                  onClick={() => {
+                    if (builderCanvasRef.current && builderCanvasRef.current.showPreview) {
+                      builderCanvasRef.current.showPreview();
+                    }
+                  }}
+                  title="Preview Report"
+                >
+                  <Eye size={16} /> Preview
+                </button>
+                <button
+                  className="save-report-btn"
+                  onClick={() => setShowSaveModal(true)}
+                >
+                  <Save size={16} /> Save Report
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Content */}
+          <div className="advanced-builder-content">
+            {activeTab === 'builder' && (
+              <AdvancedBuilderCanvas 
+                ref={builderCanvasRef}
+                reportToLoad={reportToEdit}
+                onReportLoaded={() => setReportToEdit(null)}
+              />
+            )}
+            {activeTab === 'reports' && (
+              <AdvancedReportsList onEditReport={(report) => {
+                // Store report to load and switch to builder tab
+                setReportToEdit(report);
+                setActiveTab('builder');
+              }} />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Save Modal */}
+      <SaveReportModal
+        show={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        reportConfig={getReportConfig() || {
+          name: '',
+          objectType: '',
+          fields: [],
+          relationships: [],
+          subqueries: [],
+          filters: [],
+          category: 'Uncategorized'
+        }}
+        onSave={handleSave}
+      />
+    </div>
+  );
+};
+
+export default AdvancedReportBuilder;
+

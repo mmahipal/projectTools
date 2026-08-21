@@ -1,0 +1,65 @@
+{
+  "projectName": "P20315 Peregrine EN Transcription 2024 (Perkiomen-D)",
+  "shortProjectName": "Perkiomen-D",
+  "contributorProjectName": "P20315 Peregrine EN Transcription 2024 (Perkiomen-D)",
+  "workdayProjectId": "P20315",
+  "appenPartner": "Appen",
+  "jobCategory": "--None--",
+  "projectShortDescription": "Your task is to produce highly accurate transcriptions of speech combined with annotation mark-up. We will provide you with Guidelines for how to transcribe and annotate the audio.",
+  "projectLongDescription": "This project requires stable internet connection, strong attention to detail, understanding of basic linguistic concepts, good reading comprehension skills in English, ability to review examples and apply rules to data, familiarity with spelling conventions in US English, native/near-native knowledge of US English, prior experience with transcription, and prior experience with annotation of acoustic data.",
+  "projectType": "Transcription",
+  "projectPriority": 50.0,
+  "account": "Capstone",
+  "programName": "--None--",
+  "hireStartDate": "2024-02-05",
+  "predictedCloseDate": "2024-12-31",
+  "deliveryToolOrg": "Appen",
+  "deliveryToolName": "ADAP",
+  "projectPage": "",
+  "projectStatus": "Draft",
+  "projectPaymentMethod": "Productivity only",
+  "requirePMApprovalForProductivity": false,
+  "paymentSetupRequired": true,
+  "manualActivationRequired": false,
+  "clientToolAccountRequired": false,
+  "projectManager": "Anna Shaar",
+  "projectSupportLead": "Anwaruddin Ibrahim",
+  "casesDCSupportTeam": "",
+  "languages": "Japanese - Japan\nEnglish - United Kingdom\nFrench - Canada\nSpanish - US",
+  "budget": "IC US Eng LCL: $4/br, XRT ASR Assisted: 4.5, Team Size: 11, Total Hours: 162, Total: $648",
+  "sowURL": "https://appen.atlassian.net/browse/DD-1390",
+  "jiraTicketURL": "https://appen.atlassian.net/browse/SQ-3559",
+  "casablancaHomeURL": "https://client.appen.com/account/teams/6adebc90-8901-4f89-9874-039269106ccc",
+  "projectServerLocation": "/Projects/Capstone/19695_Capstone_Transcription_2024_MultiLang",
+  "locationOfAudio": "Client's S3 bucket, we do read-only once manifest (source file with links to wav and txt on client's bucket) is uploaded",
+  "locationOfDeliverables": "/Projects/Capstone/19695_Capstone_Transcription_2024_MultiLang/Tx/Deliverables/",
+  "dataHoursPerLanguage": 30,
+  "setupProductionWeeks": 4,
+  "milestones": "Week 02/05/24: Internal KO 02/06\nWeek 02/12/24: Setup started 02/05, Japanese data to arrive 02/16-02/19\nWeek 02/19-02/26: Continue production, QA\nWeek 03/04: Validation PP, Packaging, Delivery",
+  "teamMembers": "Anna Shaar - PM\nAnwaruddin Ibrahim - AIS\nGeorge Krasovitsky - AIS\nGiorgia Marcucci - Portfolio Manager",
+  "communication": "PM - Weekly Meeting - Tuesday\nPM/AIS/Portfolio Manager - Teams Channel - as needed\nPM - Health Reporting - weekly\nPM - Client Reporting - weekly"
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

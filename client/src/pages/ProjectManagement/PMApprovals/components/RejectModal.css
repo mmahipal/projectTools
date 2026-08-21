@@ -1,0 +1,13 @@
+.reject-modal .modal-icon {
+  color: #ef4444;
+}
+
+.reject-btn {
+  background: #ef4444;
+}
+
+.reject-btn:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+

@@ -1,0 +1,206 @@
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import { Menu, LogOut, RefreshCw, Loader, Filter } from 'lucide-react';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import BookmarkButton from '../components/BookmarkButton';
+import MFALogTable from '../components/MFAVerificationLogs/MFALogTable';
+import MFALogFilterBuilder from '../components/MFAVerificationLogs/MFALogFilterBuilder';
+import '../styles/MFAVerificationLogs.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+const MFAVerificationLogs = () => {
+  const { user, logout } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [loading, setLoading] = useState(true);
+  const [logs, setLogs] = useState([]);
+  const [availableFields, setAvailableFields] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+
+  useEffect(() => {
+    fetchLogs();
+    fetchAvailableFields();
+  }, []);
+
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    console.log('MFAVerificationLogs: useEffect triggered, filters:', filters);
+    fetchLogs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, debouncedSearchTerm]);
+
+  const fetchAvailableFields = async () => {
+    try {
+      const response = await apiClient.get('/mfa-verification-logs/fields');
+      if (response.data.success) {
+        setAvailableFields(response.data.fields || []);
+      }
+    } catch (error) {
+      console.error('Error fetching available fields:', error);
+    }
+  };
+
+  const fetchLogs = useCallback(async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('orderBy', 'CreatedDate');
+      params.append('orderDirection', 'DESC');
+      
+      if (filters.length > 0) {
+        // Validate and format filters before sending
+        const validFilters = filters.filter(f => f.field && f.operator && (f.value !== '' || f.operator === 'isEmpty' || f.operator === 'isNotEmpty'));
+        if (validFilters.length > 0) {
+          console.log('Applying filters:', validFilters);
+          params.append('filters', JSON.stringify(validFilters));
+        }
+      }
+      
+      if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+        params.append('search', debouncedSearchTerm.trim());
+      }
+      
+      const response = await apiClient.get(`/mfa-verification-logs/logs?${params.toString()}`);
+      if (response.data.success) {
+        setLogs(response.data.logs || []);
+      } else {
+        toast.error(response.data.error || 'Failed to fetch MFA Verification Logs');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch MFA Verification Logs';
+      toast.error(errorMessage);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [filters, debouncedSearchTerm]);
+
+  const handleRefresh = useCallback((e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setRefreshing(true);
+    fetchLogs().finally(() => {
+      setRefreshing(false);
+    });
+  }, [fetchLogs]);
+
+  const handleFilterSubmit = async (newFilters) => {
+    console.log('MFAVerificationLogs: handleFilterSubmit called with:', newFilters);
+    setFilters(newFilters);
+    setShowFilters(false);
+    // Explicitly fetch logs after setting filters
+    await fetchLogs();
+  };
+
+  const handleClearFilters = async () => {
+    setFilters([]);
+    setShowFilters(false);
+    // Explicitly fetch logs after clearing filters
+    await fetchLogs();
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <div style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease', transition: 'margin-left 0.3s ease', width: sidebarOpen ? 'calc(100% - 320px)' : 'calc(100% - 80px)' }}>
+        <div className="mfa-verification-logs-container">
+          <div className="mfa-verification-logs-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button 
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">MFA Verification Logs</h1>
+                  <p className="page-subtitle">View and manage MFA verification logs from Salesforce</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <BookmarkButton pageName="MFA Verification Logs" pageType="page" />
+                <div className="user-profile">
+                  <div className="user-avatar">
+                    {(user?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="user-name">{user?.email || 'User'}</span>
+                  <button className="logout-btn" onClick={logout} title="Logout">
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mfa-verification-logs-content">
+            <div className="mfa-verification-logs-main-content">
+              <div className="mfa-verification-logs-actions">
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing || loading}
+                  className="btn-action"
+                  title="Refresh logs"
+                >
+                  {refreshing ? <Loader size={16} className="spinning" /> : <RefreshCw size={16} />}
+                  <span>Refresh</span>
+                </button>
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`btn-action ${showFilters ? 'active' : ''}`}
+                  title="Filter logs"
+                >
+                  <Filter size={16} />
+                  <span>Filter</span>
+                  {filters.length > 0 && (
+                    <span className="action-badge">{filters.length}</span>
+                  )}
+                </button>
+              </div>
+
+              {showFilters && (
+                <MFALogFilterBuilder
+                  availableFields={availableFields}
+                  filters={filters}
+                  onSubmit={handleFilterSubmit}
+                  onClear={handleClearFilters}
+                  onClose={() => setShowFilters(false)}
+                />
+              )}
+
+              <MFALogTable 
+                logs={logs}
+                loading={loading}
+                availableFields={availableFields}
+                searchTerm={searchTerm}
+                onSearchChange={setSearchTerm}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default MFAVerificationLogs;
+

@@ -1,0 +1,15 @@
+[
+  {
+    "userId": 2,
+    "interestedAccounts": [
+      {
+        "id": "001TR00000CU8nmYAD",
+        "name": "Amazon"
+      }
+    ],
+    "interestedProjects": [],
+    "updatedAt": "2025-12-08T06:36:50.848Z",
+    "createdAt": "2025-12-06T08:30:44.778Z",
+    "gpcFilterEnabled": false
+  }
+]

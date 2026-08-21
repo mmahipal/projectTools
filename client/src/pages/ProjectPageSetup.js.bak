@@ -1,0 +1,1623 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import { saveDraftProjectPage, loadDraftProjectPage, deleteDraftProjectPage } from '../utils/draftStorage';
+import { getErrorMessage, handleError } from '../utils/errorHandler';
+import { sanitizeObject } from '../utils/security';
+import { Search, Info, Menu, Send, Save, X, Plus, LogOut, CheckCircle, XCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import '../styles/ProjectSetup.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+const ProjectPageSetup = () => {
+  const navigate = useNavigate();
+  const { user, hasPermission, logout } = useAuth();
+  const { register, handleSubmit, setValue, watch, formState: { errors }, trigger, setError, clearErrors, reset } = useForm();
+  const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showPublishResultsModal, setShowPublishResultsModal] = useState(false);
+  const [publishResults, setPublishResults] = useState(null);
+  const [pages, setPages] = useState([{ id: 1, data: {} }]);
+  const [projects, setProjects] = useState({});
+  const [loadingProjects, setLoadingProjects] = useState({});
+  const [projectSearchTerms, setProjectSearchTerms] = useState({ 1: '' });
+  const [projectObjectives, setProjectObjectives] = useState({});
+  const [loadingProjectObjectives, setLoadingProjectObjectives] = useState({});
+  const [projectObjectiveSearchTerms, setProjectObjectiveSearchTerms] = useState({ 1: '' });
+  const [qualificationSteps, setQualificationSteps] = useState({});
+  const [loadingQualificationSteps, setLoadingQualificationSteps] = useState({});
+  const [qualificationStepSearchTerms, setQualificationStepSearchTerms] = useState({ 1: '' });
+  const [selectedProjects, setSelectedProjects] = useState({});
+  const [selectedProjectObjectives, setSelectedProjectObjectives] = useState({});
+  const [selectedQualificationSteps, setSelectedQualificationSteps] = useState({});
+  const [showProjectDropdowns, setShowProjectDropdowns] = useState({});
+  const [showProjectObjectiveDropdowns, setShowProjectObjectiveDropdowns] = useState({});
+  const [showQualificationStepDropdowns, setShowQualificationStepDropdowns] = useState({});
+  // Qualification field for Default Qualification Page (retrieves from Qualification_Step__c)
+  const [projectQualifications, setProjectQualifications] = useState({});
+  const [loadingProjectQualifications, setLoadingProjectQualifications] = useState({});
+  const [projectQualificationSearchTerms, setProjectQualificationSearchTerms] = useState({ 1: '' });
+  const [selectedProjectQualifications, setSelectedProjectQualifications] = useState({});
+  const [showProjectQualificationDropdowns, setShowProjectQualificationDropdowns] = useState({});
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const dataLoadedRef = useRef(false);
+
+  useEffect(() => {
+    // Load existing project page data from server storage (for editing)
+    const loadExistingData = async () => {
+      // Prevent duplicate loading in React StrictMode
+      if (dataLoadedRef.current) return;
+      
+      try {
+        const data = await loadDraftProjectPage();
+        if (data && data.pages && data.pages.length > 0) {
+          dataLoadedRef.current = true;
+          setPages(data.pages.map((page, index) => ({ id: index + 1, data: page })));
+          // Populate search terms and selected projects
+          const newProjectSearchTerms = {};
+          const newProjectObjectiveSearchTerms = {};
+          const newQualificationStepSearchTerms = {};
+          const newProjectQualificationSearchTerms = {};
+          const newSelectedProjects = {};
+          const newSelectedProjectObjectives = {};
+          const newSelectedQualificationSteps = {};
+          const newSelectedProjectQualifications = {};
+          data.pages.forEach((page, index) => {
+            if (page.project) {
+              newProjectSearchTerms[index + 1] = page.project;
+              newSelectedProjects[index + 1] = page.project;
+            }
+            if (page.projectObjective) {
+              newProjectObjectiveSearchTerms[index + 1] = page.projectObjective;
+              newSelectedProjectObjectives[index + 1] = page.projectObjective;
+            }
+            if (page.projectQualificationStep) {
+              newQualificationStepSearchTerms[index + 1] = page.projectQualificationStep;
+              newSelectedQualificationSteps[index + 1] = page.projectQualificationStep;
+            }
+            if (page.projectQualification) {
+              newProjectQualificationSearchTerms[index + 1] = page.projectQualification;
+              newSelectedProjectQualifications[index + 1] = page.projectQualification;
+            }
+          });
+          setProjectSearchTerms(newProjectSearchTerms);
+          setProjectObjectiveSearchTerms(newProjectObjectiveSearchTerms);
+          setQualificationStepSearchTerms(newQualificationStepSearchTerms);
+          setProjectQualificationSearchTerms(newProjectQualificationSearchTerms);
+          setSelectedProjects(newSelectedProjects);
+          setSelectedProjectObjectives(newSelectedProjectObjectives);
+          setSelectedQualificationSteps(newSelectedQualificationSteps);
+          setSelectedProjectQualifications(newSelectedProjectQualifications);
+          // Populate form with existing data
+          data.pages.forEach((page, pageIndex) => {
+            Object.keys(page).forEach(key => {
+              if (page[key] !== null && page[key] !== undefined) {
+                setValue(`page_${pageIndex + 1}_${key}`, page[key]);
+              }
+            });
+          });
+          toast.success('Project page data loaded for editing');
+        } else {
+          // Clear form and set default values for new project page
+          reset();
+          setDefaultValues();
+        }
+      } catch (error) {
+        const errorMessage = handleError(error, 'ProjectPageSetup - loadProjectPageData');
+        toast.error(errorMessage);
+        // Reset form to defaults
+        reset();
+        setDefaultValues();
+      }
+    };
+    
+    loadExistingData();
+  }, [setValue, reset]);
+
+  // Search projects in Salesforce when search term changes
+  useEffect(() => {
+    const searchTimeouts = {};
+    
+    Object.keys(projectSearchTerms).forEach(pageId => {
+      const searchTerm = projectSearchTerms[pageId];
+      const selectedProject = selectedProjects[pageId];
+      
+      // Don't search if the search term matches the selected project (user has already selected)
+      if (selectedProject && searchTerm === selectedProject) {
+        setProjects(prev => ({ ...prev, [pageId]: [] }));
+        setShowProjectDropdowns(prev => ({ ...prev, [pageId]: false }));
+        return;
+      }
+      
+      if (searchTimeouts[pageId]) {
+        clearTimeout(searchTimeouts[pageId]);
+      }
+      
+      searchTimeouts[pageId] = setTimeout(async () => {
+        if (!searchTerm || searchTerm.trim() === '') {
+          setProjects(prev => ({ ...prev, [pageId]: [] }));
+          setShowProjectDropdowns(prev => ({ ...prev, [pageId]: false }));
+          return;
+        }
+
+        // Don't search if the search term matches the selected project
+        if (selectedProject && searchTerm === selectedProject) {
+          setProjects(prev => ({ ...prev, [pageId]: [] }));
+          setShowProjectDropdowns(prev => ({ ...prev, [pageId]: false }));
+          return;
+        }
+
+        setLoadingProjects(prev => ({ ...prev, [pageId]: true }));
+        try {
+          const response = await apiClient.get(`/salesforce/search-projects?search=${encodeURIComponent(searchTerm)}`);
+          if (response.data.success) {
+            setProjects(prev => ({ ...prev, [pageId]: response.data.projects || [] }));
+            setShowProjectDropdowns(prev => ({ ...prev, [pageId]: true }));
+          }
+        } catch (error) {
+          handleError(error, `ProjectPageSetup - searchProjects(${pageId})`);
+          setProjects(prev => ({ ...prev, [pageId]: [] }));
+          setShowProjectDropdowns(prev => ({ ...prev, [pageId]: false }));
+        } finally {
+          setLoadingProjects(prev => ({ ...prev, [pageId]: false }));
+        }
+      }, 300);
+    });
+
+    return () => {
+      Object.values(searchTimeouts).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [projectSearchTerms, selectedProjects]);
+
+  // Search project objectives when project is selected
+  useEffect(() => {
+    Object.keys(selectedProjects).forEach(pageId => {
+      const project = selectedProjects[pageId];
+      if (project && project.trim() !== '') {
+        // Clear selected objective when project changes
+        setSelectedProjectObjectives(prev => ({ ...prev, [pageId]: null }));
+        // Fetch project objectives immediately when project is selected
+        fetchProjectObjectives(pageId, project);
+      }
+    });
+  }, [selectedProjects]);
+
+  // Search project objectives in Salesforce when search term changes
+  useEffect(() => {
+    const searchTimeouts = {};
+    
+    Object.keys(projectObjectiveSearchTerms).forEach(pageId => {
+      const searchTerm = projectObjectiveSearchTerms[pageId];
+      const project = selectedProjects[pageId];
+      const selectedObjective = selectedProjectObjectives[pageId];
+      
+      if (!project || project.trim() === '') {
+        return;
+      }
+      
+      // Don't search if the search term matches the selected objective (user has already selected)
+      if (selectedObjective && searchTerm === selectedObjective) {
+        setProjectObjectives(prev => ({ ...prev, [pageId]: [] }));
+        setShowProjectObjectiveDropdowns(prev => ({ ...prev, [pageId]: false }));
+        return;
+      }
+      
+      if (searchTimeouts[pageId]) {
+        clearTimeout(searchTimeouts[pageId]);
+      }
+      
+      searchTimeouts[pageId] = setTimeout(async () => {
+        if (!searchTerm || searchTerm.trim() === '') {
+          // If search term is empty but we have a project, load all objectives for that project
+          if (project && project.trim() !== '') {
+            fetchProjectObjectives(pageId, project);
+          } else {
+            setProjectObjectives(prev => ({ ...prev, [pageId]: [] }));
+          }
+          return;
+        }
+
+        // Don't search if the search term matches the selected objective
+        if (selectedObjective && searchTerm === selectedObjective) {
+          setProjectObjectives(prev => ({ ...prev, [pageId]: [] }));
+          setShowProjectObjectiveDropdowns(prev => ({ ...prev, [pageId]: false }));
+          return;
+        }
+
+        setLoadingProjectObjectives(prev => ({ ...prev, [pageId]: true }));
+        try {
+          // Search project objectives by name
+          const response = await apiClient.get(`/salesforce/search-project-objectives?search=${encodeURIComponent(searchTerm)}${project ? `&project=${encodeURIComponent(project)}` : ''}`);
+          if (response.data.success) {
+            setProjectObjectives(prev => ({ ...prev, [pageId]: response.data.projectObjectives || [] }));
+            // Only show dropdown if search term doesn't match selected objective
+            if (!selectedObjective || searchTerm !== selectedObjective) {
+              setShowProjectObjectiveDropdowns(prev => ({ ...prev, [pageId]: true }));
+            }
+          }
+        } catch (error) {
+          handleError(error, `ProjectPageSetup - searchProjectObjectives(${pageId})`);
+          setProjectObjectives(prev => ({ ...prev, [pageId]: [] }));
+        } finally {
+          setLoadingProjectObjectives(prev => ({ ...prev, [pageId]: false }));
+        }
+      }, 300);
+    });
+
+    return () => {
+      Object.values(searchTimeouts).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [projectObjectiveSearchTerms, selectedProjects, selectedProjectObjectives]);
+
+  // Search qualification steps in Salesforce when search term changes - filter by selected project
+  useEffect(() => {
+    const searchTimeouts = {};
+    
+    Object.keys(qualificationStepSearchTerms).forEach(pageId => {
+      const searchTerm = qualificationStepSearchTerms[pageId];
+      const selectedQualificationStep = selectedQualificationSteps[pageId];
+      const selectedProject = selectedProjects[pageId];
+      
+      // Get the current project value from form (reactive)
+      const formProjectValue = watch(`page_${pageId}_project`);
+      
+      // Don't search if the search term matches the selected qualification step
+      if (selectedQualificationStep && searchTerm === selectedQualificationStep) {
+        setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+        setShowQualificationStepDropdowns(prev => ({ ...prev, [pageId]: false }));
+        return;
+      }
+      
+      // Don't search if search term is empty
+      if (!searchTerm || searchTerm.trim() === '') {
+        setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+        return;
+      }
+      
+      // Get the selected project name for filtering - check all sources
+      const selectedProjectName = selectedProject || projectSearchTerms[pageId] || formProjectValue;
+      
+      // Don't search if no project is selected (qualification steps must be filtered by project)
+      if (!selectedProjectName || selectedProjectName.trim() === '') {
+        setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+        return;
+      }
+      
+      if (searchTimeouts[pageId]) {
+        clearTimeout(searchTimeouts[pageId]);
+      }
+      
+      searchTimeouts[pageId] = setTimeout(async () => {
+        // Double-check conditions inside timeout
+        if (!searchTerm || searchTerm.trim() === '') {
+          setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+          return;
+        }
+
+        // Don't search if the search term matches the selected qualification step
+        if (selectedQualificationStep && searchTerm === selectedQualificationStep) {
+          setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+          setShowQualificationStepDropdowns(prev => ({ ...prev, [pageId]: false }));
+          return;
+        }
+
+        // Get the selected project name for filtering (re-check inside timeout)
+        // Re-check all sources to get the most current value
+        const currentSelectedProject = selectedProjects[pageId] || projectSearchTerms[pageId] || watch(`page_${pageId}_project`);
+        
+        // Don't search if no project is selected
+        if (!currentSelectedProject || currentSelectedProject.trim() === '') {
+          setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+          return;
+        }
+
+        setLoadingQualificationSteps(prev => ({ ...prev, [pageId]: true }));
+        try {
+          // Build query parameters with project filter - ALWAYS include project
+          const params = new URLSearchParams();
+          params.append('search', searchTerm);
+          // Always include project parameter when we have a project
+          params.append('project', currentSelectedProject);
+          
+          const response = await apiClient.get(`/salesforce/qualification-steps?${params.toString()}`);
+          if (response.data.success) {
+            const steps = response.data.qualificationSteps || [];
+            
+            // Additional client-side filtering to ensure only steps from the selected project are shown
+            // Filter out steps that don't have a projectId or have a different projectId
+            const filteredSteps = steps.filter(step => {
+              // If step doesn't have a projectId, exclude it when filtering by project
+              if (!step.projectId) {
+                return false;
+              }
+              // The backend should have already filtered, but we keep this for safety
+              // Note: We can't compare project IDs here because we only have the project name, not the ID
+              // The backend filtering should be sufficient
+              return true;
+            });
+            
+            setQualificationSteps(prev => ({ ...prev, [pageId]: filteredSteps }));
+            if (!selectedQualificationStep || searchTerm !== selectedQualificationStep) {
+              setShowQualificationStepDropdowns(prev => ({ ...prev, [pageId]: true }));
+            }
+          } else {
+            setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+          }
+        } catch (error) {
+          handleError(error, `ProjectPageSetup - searchQualificationSteps(${pageId})`);
+          setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+        } finally {
+          setLoadingQualificationSteps(prev => ({ ...prev, [pageId]: false }));
+        }
+      }, 300);
+    });
+
+    return () => {
+      Object.values(searchTimeouts).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [qualificationStepSearchTerms, selectedQualificationSteps, selectedProjects, projectSearchTerms, pages, watch]);
+
+  // Search qualifications in Salesforce when search term changes - filter by selected project
+  // This is for the "Qualification" field in "Default Qualification Page"
+  // Only shows qualifications from Qualification_Step__c (not Project_Qualification_Step__c)
+  useEffect(() => {
+    const searchTimeouts = {};
+    
+    Object.keys(projectQualificationSearchTerms).forEach(pageId => {
+      const searchTerm = projectQualificationSearchTerms[pageId];
+      const selectedProjectQualification = selectedProjectQualifications[pageId];
+      const selectedProject = selectedProjects[pageId];
+      
+      // Get the current project value from form (reactive)
+      const formProjectValue = watch(`page_${pageId}_project`);
+      
+      // Don't search if the search term matches the selected project qualification
+      if (selectedProjectQualification && searchTerm === selectedProjectQualification) {
+        setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+        setShowProjectQualificationDropdowns(prev => ({ ...prev, [pageId]: false }));
+        return;
+      }
+      
+      // Don't search if search term is empty
+      if (!searchTerm || searchTerm.trim() === '') {
+        setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+        return;
+      }
+      
+      // Get the selected project name for filtering - check all sources
+      const selectedProjectName = selectedProject || projectSearchTerms[pageId] || formProjectValue;
+      
+      // Don't search if no project is selected (project qualifications must be filtered by project)
+      if (!selectedProjectName || selectedProjectName.trim() === '') {
+        setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+        return;
+      }
+      
+      if (searchTimeouts[pageId]) {
+        clearTimeout(searchTimeouts[pageId]);
+      }
+      
+      searchTimeouts[pageId] = setTimeout(async () => {
+        // Double-check conditions inside timeout
+        if (!searchTerm || searchTerm.trim() === '') {
+          setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+          return;
+        }
+
+        // Don't search if the search term matches the selected project qualification
+        if (selectedProjectQualification && searchTerm === selectedProjectQualification) {
+          setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+          setShowProjectQualificationDropdowns(prev => ({ ...prev, [pageId]: false }));
+          return;
+        }
+
+        // Get the selected project name for filtering (re-check inside timeout)
+        // Re-check all sources to get the most current value
+        const currentSelectedProject = selectedProjects[pageId] || projectSearchTerms[pageId] || watch(`page_${pageId}_project`);
+        
+        // Don't search if no project is selected
+        if (!currentSelectedProject || currentSelectedProject.trim() === '') {
+          setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+          return;
+        }
+
+        setLoadingProjectQualifications(prev => ({ ...prev, [pageId]: true }));
+        try {
+          // Build query parameters with project filter - ALWAYS include project
+          const params = new URLSearchParams();
+          params.append('search', searchTerm);
+          // Always include project parameter when we have a project
+          params.append('project', currentSelectedProject);
+          
+          const response = await apiClient.get(`/salesforce/qualification-steps?${params.toString()}`);
+          if (response.data.success) {
+            const qualifications = response.data.qualificationSteps || [];
+            
+            // Additional client-side filtering to ensure only qualifications from the selected project are shown
+            // For "Default Qualification Page", we only want qualifications from Qualification_Step__c (not Project_Qualification_Step__c)
+            // Filter out qualifications that don't have a projectId, have a different projectId, or are from the wrong object type
+            const filteredQualifications = qualifications.filter(qualification => {
+              // For "Default Qualification Page", only include qualifications from Qualification_Step__c
+              if (qualification.objectType && qualification.objectType !== 'Qualification_Step__c') {
+                return false;
+              }
+              // If qualification doesn't have a projectId, check if it's from Qualification_Step__c
+              // Qualification_Step__c might not have a project field, so include it if it's from that object
+              if (!qualification.projectId) {
+                if (qualification.objectType === 'Qualification_Step__c') {
+                  // Include qualifications from Qualification_Step__c even if they don't have a projectId
+                  // (they might not be project-specific)
+                  return true;
+                }
+                // For other object types, exclude if no projectId
+                return false;
+              }
+              // If qualification has a projectId, check if it matches the selected project
+              // The backend should have already filtered, but we keep this for safety
+              return true;
+            });
+            
+            setProjectQualifications(prev => ({ ...prev, [pageId]: filteredQualifications }));
+            if (!selectedProjectQualification || searchTerm !== selectedProjectQualification) {
+              setShowProjectQualificationDropdowns(prev => ({ ...prev, [pageId]: true }));
+            }
+          } else {
+            setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+          }
+        } catch (error) {
+          handleError(error, `ProjectPageSetup - searchProjectQualifications(${pageId})`);
+          setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+        } finally {
+          setLoadingProjectQualifications(prev => ({ ...prev, [pageId]: false }));
+        }
+      }, 300);
+    });
+
+    return () => {
+      Object.values(searchTimeouts).forEach(timeout => clearTimeout(timeout));
+    };
+  }, [projectQualificationSearchTerms, selectedProjectQualifications, selectedProjects, projectSearchTerms, pages, watch]);
+
+  const fetchProjectObjectives = async (pageId, project) => {
+    if (!project || project.trim() === '') {
+      setProjectObjectives(prev => ({ ...prev, [pageId]: [] }));
+      return;
+    }
+
+    setLoadingProjectObjectives(prev => ({ ...prev, [pageId]: true }));
+    try {
+      const response = await apiClient.get(`/salesforce/project-objectives?project=${encodeURIComponent(project)}`);
+      if (response.data.success) {
+        setProjectObjectives(prev => ({ ...prev, [pageId]: response.data.projectObjectives || [] }));
+      }
+    } catch (error) {
+      handleError(error, `ProjectPageSetup - fetchProjectObjectives(${pageId})`);
+      setProjectObjectives(prev => ({ ...prev, [pageId]: [] }));
+    } finally {
+      setLoadingProjectObjectives(prev => ({ ...prev, [pageId]: false }));
+    }
+  };
+
+  const handleProjectSelect = (pageId, projectName) => {
+    setSelectedProjects(prev => ({ ...prev, [pageId]: projectName }));
+    setValue(`page_${pageId}_project`, projectName);
+    setProjectSearchTerms(prev => ({ ...prev, [pageId]: projectName }));
+    // Hide dropdown immediately
+    setShowProjectDropdowns(prev => ({ ...prev, [pageId]: false }));
+    // Clear projects list to stop showing search results
+    setProjects(prev => ({ ...prev, [pageId]: [] }));
+    // Clear project objective when project changes
+    setValue(`page_${pageId}_projectObjective`, '');
+    setProjectObjectiveSearchTerms(prev => ({ ...prev, [pageId]: '' }));
+    setProjectObjectives(prev => ({ ...prev, [pageId]: [] }));
+    setSelectedProjectObjectives(prev => ({ ...prev, [pageId]: null }));
+    // Clear qualification step when project changes (since it should be filtered by project)
+    setValue(`page_${pageId}_projectQualificationStep`, '');
+    setQualificationStepSearchTerms(prev => ({ ...prev, [pageId]: '' }));
+    setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+    setSelectedQualificationSteps(prev => ({ ...prev, [pageId]: null }));
+    // Clear project qualification when project changes (since it should be filtered by project)
+    setValue(`page_${pageId}_projectQualification`, '');
+    setProjectQualificationSearchTerms(prev => ({ ...prev, [pageId]: '' }));
+    setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+    setSelectedProjectQualifications(prev => ({ ...prev, [pageId]: null }));
+    // Fetch project objectives for the selected project immediately
+    if (projectName && projectName.trim() !== '') {
+      fetchProjectObjectives(pageId, projectName);
+    }
+  };
+
+  const handleProjectObjectiveSelect = (pageId, objectiveName) => {
+    setValue(`page_${pageId}_projectObjective`, objectiveName);
+    setProjectObjectiveSearchTerms(prev => ({ ...prev, [pageId]: objectiveName }));
+    setSelectedProjectObjectives(prev => ({ ...prev, [pageId]: objectiveName }));
+    // Hide dropdown immediately and clear objectives list to prevent infinite loop
+    setShowProjectObjectiveDropdowns(prev => ({ ...prev, [pageId]: false }));
+    setProjectObjectives(prev => ({ ...prev, [pageId]: [] }));
+  };
+
+  const handleQualificationStepSelect = (pageId, stepName) => {
+    setValue(`page_${pageId}_projectQualificationStep`, stepName);
+    setQualificationStepSearchTerms(prev => ({ ...prev, [pageId]: stepName }));
+    setSelectedQualificationSteps(prev => ({ ...prev, [pageId]: stepName }));
+    // Hide dropdown immediately and clear steps list to prevent infinite loop
+    setShowQualificationStepDropdowns(prev => ({ ...prev, [pageId]: false }));
+    setQualificationSteps(prev => ({ ...prev, [pageId]: [] }));
+  };
+
+  const handleProjectQualificationSelect = (pageId, qualificationName) => {
+    setValue(`page_${pageId}_projectQualification`, qualificationName);
+    setProjectQualificationSearchTerms(prev => ({ ...prev, [pageId]: qualificationName }));
+    setSelectedProjectQualifications(prev => ({ ...prev, [pageId]: qualificationName }));
+    // Hide dropdown immediately and clear qualifications list to prevent infinite loop
+    setShowProjectQualificationDropdowns(prev => ({ ...prev, [pageId]: false }));
+    setProjectQualifications(prev => ({ ...prev, [pageId]: [] }));
+  };
+
+  const setDefaultValues = () => {
+    // Set default values for the first page
+    setValue('page_1_projectPageType', '');
+    setValue('page_1_project', '');
+    setValue('page_1_projectObjective', '');
+  };
+
+  const addNewPage = () => {
+    const newPageId = pages.length + 1;
+    setPages(prev => [...prev, { id: newPageId, data: {} }]);
+    setProjectSearchTerms(prev => ({ ...prev, [newPageId]: '' }));
+    setProjectObjectiveSearchTerms(prev => ({ ...prev, [newPageId]: '' }));
+    setQualificationStepSearchTerms(prev => ({ ...prev, [newPageId]: '' }));
+    setProjectQualificationSearchTerms(prev => ({ ...prev, [newPageId]: '' }));
+    setSelectedProjects(prev => ({ ...prev, [newPageId]: null }));
+    setSelectedProjectObjectives(prev => ({ ...prev, [newPageId]: null }));
+    setSelectedQualificationSteps(prev => ({ ...prev, [newPageId]: null }));
+    setSelectedProjectQualifications(prev => ({ ...prev, [newPageId]: null }));
+  };
+
+  const removePage = (pageId) => {
+    if (pages.length === 1) {
+      toast.error('At least one page is required');
+      return;
+    }
+    setPages(prev => prev.filter(page => page.id !== pageId));
+    // Clean up state for removed page
+    const newProjectSearchTerms = { ...projectSearchTerms };
+    delete newProjectSearchTerms[pageId];
+    setProjectSearchTerms(newProjectSearchTerms);
+    
+    const newProjectObjectiveSearchTerms = { ...projectObjectiveSearchTerms };
+    delete newProjectObjectiveSearchTerms[pageId];
+    setProjectObjectiveSearchTerms(newProjectObjectiveSearchTerms);
+    
+    const newQualificationStepSearchTerms = { ...qualificationStepSearchTerms };
+    delete newQualificationStepSearchTerms[pageId];
+    setQualificationStepSearchTerms(newQualificationStepSearchTerms);
+    
+    const newProjectQualificationSearchTerms = { ...projectQualificationSearchTerms };
+    delete newProjectQualificationSearchTerms[pageId];
+    setProjectQualificationSearchTerms(newProjectQualificationSearchTerms);
+    
+    const newSelectedProjects = { ...selectedProjects };
+    delete newSelectedProjects[pageId];
+    setSelectedProjects(newSelectedProjects);
+    
+    const newProjectObjectives = { ...projectObjectives };
+    delete newProjectObjectives[pageId];
+    setProjectObjectives(newProjectObjectives);
+    
+    const newQualificationSteps = { ...qualificationSteps };
+    delete newQualificationSteps[pageId];
+    setQualificationSteps(newQualificationSteps);
+    
+    const newProjectQualifications = { ...projectQualifications };
+    delete newProjectQualifications[pageId];
+    setProjectQualifications(newProjectQualifications);
+    
+    const newSelectedProjectObjectives = { ...selectedProjectObjectives };
+    delete newSelectedProjectObjectives[pageId];
+    setSelectedProjectObjectives(newSelectedProjectObjectives);
+    
+    const newSelectedQualificationSteps = { ...selectedQualificationSteps };
+    delete newSelectedQualificationSteps[pageId];
+    setSelectedQualificationSteps(newSelectedQualificationSteps);
+    
+    const newSelectedProjectQualifications = { ...selectedProjectQualifications };
+    delete newSelectedProjectQualifications[pageId];
+    setSelectedProjectQualifications(newSelectedProjectQualifications);
+  };
+
+  const handleSave = async () => {
+    if (!hasPermission('create_project')) {
+      toast.error('You do not have permission to save project pages');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const allFormData = watch();
+      const pagesData = pages.map(page => {
+        const pageData = {};
+        Object.keys(allFormData).forEach(key => {
+          if (key.startsWith(`page_${page.id}_`)) {
+            const fieldName = key.replace(`page_${page.id}_`, '');
+            pageData[fieldName] = allFormData[key];
+          }
+        });
+        return pageData;
+      });
+
+      const draftData = { pages: pagesData };
+      await saveDraftProjectPage(draftData);
+      
+      // Also save to the main projects endpoint
+      const response = await apiClient.post('/project-pages', draftData);
+      
+      if (response.data.success) {
+        toast.success('Project pages saved successfully!');
+      } else {
+        toast.error('Failed to save project pages: ' + getErrorMessage(response.data));
+      }
+    } catch (error) {
+      const errorMessage = handleError(error, 'ProjectPageSetup - saveProjectPages');
+      toast.error(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
+      reset();
+      setPages([{ id: 1, data: {} }]);
+      setProjectSearchTerms({});
+      setProjectObjectiveSearchTerms({});
+      setSelectedProjects({});
+      setProjectObjectives({});
+      setDefaultValues();
+      navigate('/dashboard');
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!hasPermission('create_project')) {
+      toast.error('You do not have permission to publish project pages');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const allFormData = watch();
+      
+      // Validate that Project Qualification Step is provided when Project Page Type is "Project Qualifying Page"
+      // Validate that Project Qualification is provided when Project Page Type is "Default Qualification Page"
+      const validationErrors = [];
+      pages.forEach(page => {
+        const pageType = allFormData[`page_${page.id}_projectPageType`];
+        const qualificationStep = allFormData[`page_${page.id}_projectQualificationStep`];
+        const projectQualification = allFormData[`page_${page.id}_projectQualification`];
+        if (pageType === 'Project Qualifying Page' && (!qualificationStep || qualificationStep.trim() === '')) {
+          validationErrors.push(`Page ${page.id}: Project Qualification Step is required when Project Page Type is "Project Qualifying Page"`);
+          setError(`page_${page.id}_projectQualificationStep`, {
+            type: 'required',
+            message: 'Project Qualification Step is required'
+          });
+        }
+        if (pageType === 'Default Qualification Page' && (!projectQualification || projectQualification.trim() === '')) {
+          validationErrors.push(`Page ${page.id}: Qualification is required when Project Page Type is "Default Qualification Page"`);
+          setError(`page_${page.id}_projectQualification`, {
+            type: 'required',
+            message: 'Qualification is required'
+          });
+        }
+      });
+      
+      if (validationErrors.length > 0) {
+        toast.error(validationErrors[0]);
+        setSubmitting(false);
+        return;
+      }
+      
+      const pagesData = pages.map(page => {
+        const pageData = {};
+        Object.keys(allFormData).forEach(key => {
+          if (key.startsWith(`page_${page.id}_`)) {
+            const fieldName = key.replace(`page_${page.id}_`, '');
+            const value = allFormData[key];
+            // Include all values except undefined
+            if (value !== undefined) {
+              if (typeof value === 'string') {
+                pageData[fieldName] = value.trim();
+              } else if (typeof value === 'boolean') {
+                pageData[fieldName] = value;
+              } else {
+                pageData[fieldName] = value;
+              }
+            }
+          }
+        });
+        // Ensure all fields are explicitly included
+        if (allFormData[`page_${page.id}_projectPageType`] !== undefined) {
+          pageData.projectPageType = allFormData[`page_${page.id}_projectPageType`];
+        }
+        if (allFormData[`page_${page.id}_project`] !== undefined) {
+          pageData.project = allFormData[`page_${page.id}_project`];
+        }
+        if (allFormData[`page_${page.id}_projectObjective`] !== undefined) {
+          pageData.projectObjective = allFormData[`page_${page.id}_projectObjective`];
+        }
+        if (allFormData[`page_${page.id}_projectPageDescription`] !== undefined) {
+          pageData.projectPageDescription = allFormData[`page_${page.id}_projectPageDescription`];
+        }
+        // Always include projectQualificationStep if Project Page Type is "Project Qualifying Page"
+        // Always include projectQualification if Project Page Type is "Default Qualification Page"
+        const pageType = allFormData[`page_${page.id}_projectPageType`];
+        if (pageType === 'Project Qualifying Page') {
+          // If Project Page Type is "Project Qualifying Page", qualification step is required
+          if (allFormData[`page_${page.id}_projectQualificationStep`] !== undefined) {
+            pageData.projectQualificationStep = allFormData[`page_${page.id}_projectQualificationStep`];
+          } else {
+            // If not provided, set to empty string so server validation can catch it
+            pageData.projectQualificationStep = '';
+          }
+        } else if (pageType === 'Default Qualification Page') {
+          // If Project Page Type is "Default Qualification Page", project qualification is required
+          if (allFormData[`page_${page.id}_projectQualification`] !== undefined) {
+            pageData.projectQualification = allFormData[`page_${page.id}_projectQualification`];
+          } else {
+            // If not provided, set to empty string so server validation can catch it
+            pageData.projectQualification = '';
+          }
+        } else if (allFormData[`page_${page.id}_projectQualificationStep`] !== undefined) {
+          // Include it if provided for other page types
+          pageData.projectQualificationStep = allFormData[`page_${page.id}_projectQualificationStep`];
+        }
+        if (allFormData[`page_${page.id}_active`] !== undefined) {
+          pageData.active = allFormData[`page_${page.id}_active`] || false;
+        } else {
+          pageData.active = false;
+        }
+        return pageData;
+      });
+
+      // Sanitize all page data before sending
+      const sanitizedPagesData = pagesData.map(pageData => sanitizeObject(pageData));
+      
+      // Publish all pages in parallel
+      const publishPromises = sanitizedPagesData.map((pageData, index) => 
+        apiClient.post('/salesforce/create-project-page', pageData, {
+          timeout: 300000
+        }).then(response => ({ success: true, pageIndex: index + 1, data: response.data }))
+          .catch(error => {
+            const errorMessage = handleError(error, `ProjectPageSetup - publishPage(${index + 1})`);
+            let displayMessage = errorMessage;
+            if (error.response) {
+              // Server responded with error status
+              if (error.response.status === 404) {
+                displayMessage = `Route not found (404). The server may need to be restarted to load the new route.`;
+              } else {
+                // Get error message from response
+                const errorData = error.response.data;
+                displayMessage = getErrorMessage(error);
+                
+                // If there are details, append them
+                if (errorData?.details && Array.isArray(errorData.details) && errorData.details.length > 0) {
+                  const detailMessages = errorData.details.map(d => d.message || d.statusCode || JSON.stringify(d)).join('; ');
+                  displayMessage += ` (Details: ${detailMessages})`;
+                } else if (errorData?.details && typeof errorData.details === 'string') {
+                  displayMessage += ` (Details: ${errorData.details})`;
+                }
+              }
+            } else if (error.request) {
+              // Request was made but no response received
+              if (error.code === 'ECONNREFUSED' || error.code === 'ERR_NETWORK') {
+                displayMessage = 'Cannot connect to server. Please ensure the server is running on port 5000.';
+              } else if (error.code === 'ETIMEDOUT' || error.message?.includes('timeout')) {
+                displayMessage = 'Request timed out. The server may be slow or unresponsive.';
+              } else {
+                displayMessage = `No response from server: ${error.message || error.code || 'Unknown network error'}`;
+              }
+            } else {
+              // Error setting up the request
+              displayMessage = error.message || 'Unknown error';
+            }
+            return { 
+              success: false, 
+              pageIndex: index + 1, 
+              error: displayMessage 
+            };
+          })
+      );
+
+      const results = await Promise.all(publishPromises);
+      
+      const successful = results.filter(r => r.success);
+      const failed = results.filter(r => !r.success);
+
+      // Consolidate all results into modal
+      const publishedObjects = successful.map(result => ({
+        type: 'Project Page',
+        name: result.data?.objectName || `Page ${result.pageIndex}`,
+        id: result.data?.salesforceId,
+        pageIndex: result.pageIndex
+      }));
+
+      const failedObjects = failed.map(result => ({
+        type: 'Project Page',
+        name: `Page ${result.pageIndex}`,
+        error: result.error,
+        pageIndex: result.pageIndex
+      }));
+
+      if (publishedObjects.length > 0 || failedObjects.length > 0) {
+        setPublishResults({
+          published: publishedObjects,
+          failed: failedObjects
+        });
+        setShowPublishResultsModal(true);
+      }
+
+      if (successful.length === pagesData.length) {
+        await deleteDraftProjectPage();
+      }
+    } catch (error) {
+      const errorMessage = handleError(error, 'ProjectPageSetup - publishProjectPages');
+      toast.error(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  if (!user) {
+    return null;
+  }
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <div className="project-setup" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease' }}>
+        <div className="setup-container">
+          <div className="setup-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button 
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">Create Project Page</h1>
+                  <p className="page-subtitle">Create a new project page by entering information in the form below</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <div className="user-profile">
+                  <div className="user-avatar">
+                    {(user?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="user-name">{user?.email || 'User'}</span>
+                  <button className="logout-btn" onClick={logout} title="Logout">
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit(handlePublish)}>
+            {pages.map((page, pageIndex) => (
+              <div key={page.id} className="section-content" style={{ marginTop: pageIndex > 0 ? '32px' : '0' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h2>Page {page.id}</h2>
+                  {pages.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removePage(page.id)}
+                      className="btn-danger"
+                      style={{ padding: '4px 8px', fontSize: '12px' }}
+                    >
+                      <X size={14} style={{ marginRight: '4px' }} />
+                      Remove Page
+                    </button>
+                  )}
+                </div>
+                <div className="form-grid compact-grid">
+                  <div className="form-group">
+                    <label>
+                      * Project Page Type
+                    </label>
+                    <select 
+                      {...register(`page_${page.id}_projectPageType`, { required: true })} 
+                      className={fieldErrors[`page_${page.id}_projectPageType`] ? 'error-field' : ''}
+                      style={{ fontSize: '12px', padding: '6px 10px', height: '32px' }}
+                    >
+                      <option value="">--None--</option>
+                      <option value="Project Splash Page (Preapply)">Project Splash Page (Preapply)</option>
+                      <option value="Project Pre-Qualification">Project Pre-Qualification</option>
+                      <option value="Project Qualifying Page">Project Qualifying Page</option>
+                      <option value="Project Active Page">Project Active Page</option>
+                      <option value="Default Qualification Page">Default Qualification Page</option>
+                    </select>
+                    {errors[`page_${page.id}_projectPageType`] && <span className="error">Required</span>}
+                  </div>
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>
+                      * Project
+                      <Info size={14} className="info-icon" />
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input 
+                        type="text" 
+                        {...register(`page_${page.id}_project`, { required: true })} 
+                        className={fieldErrors[`page_${page.id}_project`] ? 'error-field' : ''} 
+                        placeholder="Search or enter project name..."
+                        style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', width: '100%', height: '32px' }}
+                        value={projectSearchTerms[page.id] ?? ''}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setProjectSearchTerms(prev => ({ ...prev, [page.id]: newValue }));
+                          setValue(`page_${page.id}_project`, newValue);
+                          // If the value matches the selected project, don't show dropdown
+                          if (selectedProjects[page.id] && newValue === selectedProjects[page.id]) {
+                            setShowProjectDropdowns(prev => ({ ...prev, [page.id]: false }));
+                            setProjects(prev => ({ ...prev, [page.id]: [] }));
+                          } else if (newValue.trim() !== '') {
+                            // Only show dropdown if there's a search term and it doesn't match selected project
+                            setShowProjectDropdowns(prev => ({ ...prev, [page.id]: true }));
+                          } else {
+                            setShowProjectDropdowns(prev => ({ ...prev, [page.id]: false }));
+                            setProjects(prev => ({ ...prev, [page.id]: [] }));
+                          }
+                        }}
+                        onFocus={() => {
+                          // Only show dropdown if there's a search term, results exist, and it doesn't match selected project
+                          const searchTerm = projectSearchTerms[page.id];
+                          const selectedProject = selectedProjects[page.id];
+                          if (searchTerm && searchTerm !== selectedProject && projects[page.id]?.length > 0) {
+                            setShowProjectDropdowns(prev => ({ ...prev, [page.id]: true }));
+                          }
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setShowProjectDropdowns(prev => ({ ...prev, [page.id]: false })), 200);
+                        }}
+                      />
+                      <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                      {showProjectDropdowns[page.id] && projects[page.id]?.length > 0 && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          backgroundColor: 'white',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          zIndex: 1000,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                          marginTop: '4px'
+                        }}>
+                          {loadingProjects[page.id] ? (
+                            <div style={{ padding: '6px', fontSize: '12px', color: '#666', textAlign: 'center' }}>Searching...</div>
+                          ) : (
+                            projects[page.id]?.map(project => (
+                              <div
+                                key={project.id}
+                                onClick={() => handleProjectSelect(page.id, project.name)}
+                                style={{
+                                  padding: '6px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: '12px',
+                                  borderBottom: '1px solid #f0f0f0'
+                                }}
+                                onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                                onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                              >
+                                {project.name} {project.status && `(${project.status})`}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {errors[`page_${page.id}_project`] && <span className="error">Required</span>}
+                  </div>
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>
+                      * Project Objective
+                    </label>
+                    {loadingProjectObjectives[page.id] ? (
+                      <div style={{ padding: '6px', fontSize: '12px', color: '#666' }}>Loading project objectives...</div>
+                    ) : projectObjectives[page.id]?.length > 0 ? (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          {...register(`page_${page.id}_projectObjective`, { required: true })} 
+                          className={fieldErrors[`page_${page.id}_projectObjective`] ? 'error-field' : ''} 
+                          placeholder="Search or enter project objective name..."
+                          style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', width: '100%', height: '32px' }}
+                          value={projectObjectiveSearchTerms[page.id] ?? ''}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setProjectObjectiveSearchTerms(prev => ({ ...prev, [page.id]: newValue }));
+                            setValue(`page_${page.id}_projectObjective`, newValue);
+                            // Clear selected objective if user is typing something different
+                            const selectedObjective = selectedProjectObjectives[page.id];
+                            if (selectedObjective && newValue !== selectedObjective) {
+                              setSelectedProjectObjectives(prev => ({ ...prev, [page.id]: null }));
+                            }
+                            // Only show dropdown if the value doesn't match selected objective
+                            if (!selectedObjective || newValue !== selectedObjective) {
+                              setShowProjectObjectiveDropdowns(prev => ({ ...prev, [page.id]: true }));
+                            } else {
+                              setShowProjectObjectiveDropdowns(prev => ({ ...prev, [page.id]: false }));
+                              setProjectObjectives(prev => ({ ...prev, [page.id]: [] }));
+                            }
+                          }}
+                          onFocus={() => {
+                            const selectedObjective = selectedProjectObjectives[page.id];
+                            const searchTerm = projectObjectiveSearchTerms[page.id];
+                            // Only show dropdown if there's a search term, results exist, and it doesn't match selected objective
+                            if (searchTerm && (!selectedObjective || searchTerm !== selectedObjective) && projectObjectives[page.id]?.length > 0) {
+                              setShowProjectObjectiveDropdowns(prev => ({ ...prev, [page.id]: true }));
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setShowProjectObjectiveDropdowns(prev => ({ ...prev, [page.id]: false })), 200);
+                          }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                        {showProjectObjectiveDropdowns[page.id] && projectObjectives[page.id]?.length > 0 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: 'white',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            marginTop: '4px'
+                          }}>
+                            {projectObjectives[page.id]?.map(objective => (
+                              <div
+                                key={objective.id}
+                                onClick={() => handleProjectObjectiveSelect(page.id, objective.contributorFacingProjectName || objective.name)}
+                                style={{
+                                  padding: '6px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: '12px',
+                                  borderBottom: '1px solid #f0f0f0'
+                                }}
+                                onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                                onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                              >
+                                {objective.contributorFacingProjectName || objective.name}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : selectedProjects[page.id] ? (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          {...register(`page_${page.id}_projectObjective`, { required: true })} 
+                          placeholder="No project objectives found. Enter manually..."
+                          style={{ paddingRight: '36px', fontSize: '12px', padding: '6px 10px', height: '32px' }}
+                          value={projectObjectiveSearchTerms[page.id] ?? ''}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setProjectObjectiveSearchTerms(prev => ({ ...prev, [page.id]: newValue }));
+                            setValue(`page_${page.id}_projectObjective`, newValue);
+                          }}
+                        />
+                        <Search size={16} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                      </div>
+                    ) : (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          {...register(`page_${page.id}_projectObjective`, { required: true })} 
+                          placeholder="Select a project first..."
+                          disabled
+                          style={{ paddingRight: '40px', fontSize: '13px', padding: '8px', opacity: 0.5 }}
+                          value={projectObjectiveSearchTerms[page.id] ?? ''}
+                        />
+                        <Search size={16} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                      </div>
+                    )}
+                    {errors[`page_${page.id}_projectObjective`] && <span className="error">Required</span>}
+                  </div>
+                  {watch(`page_${page.id}_projectPageType`) === 'Project Qualifying Page' && (
+                    <div className="form-group" style={{ position: 'relative' }}>
+                      <label>
+                        * Project Qualification Step
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          {...register(`page_${page.id}_projectQualificationStep`, { 
+                            validate: (value) => {
+                              const pageType = watch(`page_${page.id}_projectPageType`);
+                              if (pageType === 'Project Qualifying Page' && (!value || value.trim() === '')) {
+                                return 'Project Qualification Step is required when Project Page Type is "Project Qualifying Page"';
+                              }
+                              return true;
+                            }
+                          })} 
+                          className={fieldErrors[`page_${page.id}_projectQualificationStep`] ? 'error-field' : ''} 
+                          placeholder="Search or enter qualification step name..."
+                          style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', width: '100%', height: '32px' }}
+                          value={qualificationStepSearchTerms[page.id] ?? ''}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setQualificationStepSearchTerms(prev => ({ ...prev, [page.id]: newValue }));
+                            setValue(`page_${page.id}_projectQualificationStep`, newValue);
+                            // Clear selected step if user is typing something different
+                            const selectedStep = selectedQualificationSteps[page.id];
+                            if (selectedStep && newValue !== selectedStep) {
+                              setSelectedQualificationSteps(prev => ({ ...prev, [page.id]: null }));
+                            }
+                            // Only show dropdown if the value doesn't match selected step
+                            if (!selectedStep || newValue !== selectedStep) {
+                              setShowQualificationStepDropdowns(prev => ({ ...prev, [page.id]: true }));
+                            } else {
+                              setShowQualificationStepDropdowns(prev => ({ ...prev, [page.id]: false }));
+                              setQualificationSteps(prev => ({ ...prev, [page.id]: [] }));
+                            }
+                          }}
+                          onFocus={() => {
+                            const selectedStep = selectedQualificationSteps[page.id];
+                            const searchTerm = qualificationStepSearchTerms[page.id];
+                            // Only show dropdown if there's a search term, results exist, and it doesn't match selected step
+                            if (searchTerm && (!selectedStep || searchTerm !== selectedStep) && qualificationSteps[page.id]?.length > 0) {
+                              setShowQualificationStepDropdowns(prev => ({ ...prev, [page.id]: true }));
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setShowQualificationStepDropdowns(prev => ({ ...prev, [page.id]: false })), 200);
+                          }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                        {showQualificationStepDropdowns[page.id] && qualificationSteps[page.id]?.length > 0 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: 'white',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            marginTop: '4px'
+                          }}>
+                            {loadingQualificationSteps[page.id] ? (
+                              <div style={{ padding: '6px', fontSize: '12px', color: '#666', textAlign: 'center' }}>Searching...</div>
+                            ) : (
+                              qualificationSteps[page.id]?.map(step => (
+                                <div
+                                  key={step.id}
+                                  onClick={() => handleQualificationStepSelect(page.id, step.name)}
+                                  style={{
+                                    padding: '8px 12px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    borderBottom: '1px solid #f0f0f0'
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                                  onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                                >
+                                  {step.name}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {errors[`page_${page.id}_projectQualificationStep`] && <span className="error">Required</span>}
+                    </div>
+                  )}
+                  {watch(`page_${page.id}_projectPageType`) === 'Default Qualification Page' && (
+                    <div className="form-group" style={{ position: 'relative' }}>
+                      <label>
+                        * Qualification
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          {...register(`page_${page.id}_projectQualification`, { 
+                            validate: (value) => {
+                              const pageType = watch(`page_${page.id}_projectPageType`);
+                              if (pageType === 'Default Qualification Page' && (!value || value.trim() === '')) {
+                                return 'Qualification is required when Project Page Type is "Default Qualification Page"';
+                              }
+                              return true;
+                            }
+                          })} 
+                          className={fieldErrors[`page_${page.id}_projectQualification`] ? 'error-field' : ''} 
+                          placeholder="Search or enter qualification name..."
+                          style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', width: '100%', height: '32px' }}
+                          value={projectQualificationSearchTerms[page.id] ?? ''}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setProjectQualificationSearchTerms(prev => ({ ...prev, [page.id]: newValue }));
+                            setValue(`page_${page.id}_projectQualification`, newValue);
+                            // Clear selected qualification if user is typing something different
+                            const selectedQualification = selectedProjectQualifications[page.id];
+                            if (selectedQualification && newValue !== selectedQualification) {
+                              setSelectedProjectQualifications(prev => ({ ...prev, [page.id]: null }));
+                            }
+                            // Only show dropdown if the value doesn't match selected qualification
+                            if (!selectedQualification || newValue !== selectedQualification) {
+                              setShowProjectQualificationDropdowns(prev => ({ ...prev, [page.id]: true }));
+                            } else {
+                              setShowProjectQualificationDropdowns(prev => ({ ...prev, [page.id]: false }));
+                              setProjectQualifications(prev => ({ ...prev, [page.id]: [] }));
+                            }
+                          }}
+                          onFocus={() => {
+                            const selectedQualification = selectedProjectQualifications[page.id];
+                            const searchTerm = projectQualificationSearchTerms[page.id];
+                            // Only show dropdown if there's a search term, results exist, and it doesn't match selected qualification
+                            if (searchTerm && (!selectedQualification || searchTerm !== selectedQualification) && projectQualifications[page.id]?.length > 0) {
+                              setShowProjectQualificationDropdowns(prev => ({ ...prev, [page.id]: true }));
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setShowProjectQualificationDropdowns(prev => ({ ...prev, [page.id]: false })), 200);
+                          }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                        {showProjectQualificationDropdowns[page.id] && projectQualifications[page.id]?.length > 0 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            marginTop: '4px'
+                          }}>
+                            {loadingProjectQualifications[page.id] ? (
+                              <div style={{ padding: '8px', fontSize: '13px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>Searching...</div>
+                            ) : (
+                              projectQualifications[page.id]?.map(qualification => (
+                                <div
+                                  key={qualification.id}
+                                  onClick={() => handleProjectQualificationSelect(page.id, qualification.name)}
+                                  style={{
+                                    padding: '8px 12px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    borderBottom: '1px solid #f0f0f0',
+                                    backgroundColor: '#ffffff',
+                                    color: '#000000'
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                                  onMouseLeave={(e) => e.target.style.backgroundColor = '#ffffff'}
+                                >
+                                  {qualification.name}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {errors[`page_${page.id}_projectQualification`] && <span className="error">Required</span>}
+                    </div>
+                  )}
+                  <div className="form-group full-width">
+                    <label>
+                      Project Page Description
+                    </label>
+                    <textarea 
+                      {...register(`page_${page.id}_projectPageDescription`)} 
+                      rows="3"
+                      placeholder="Enter project page description..."
+                      style={{ fontSize: '12px', padding: '6px 10px', width: '100%', minHeight: '32px', resize: 'vertical' }}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                      <input 
+                        type="checkbox" 
+                        {...register(`page_${page.id}_active`)} 
+                        style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      />
+                      Active
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            <div className="form-actions" style={{ marginTop: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <button
+                  type="button"
+                  onClick={addNewPage}
+                  className="btn-secondary"
+                  style={{ marginRight: '8px' }}
+                >
+                  <Plus size={16} style={{ marginRight: '4px' }} />
+                  Add New Page
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="btn-secondary"
+                >
+                  <X size={16} style={{ marginRight: '4px' }} />
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="btn-secondary"
+                  disabled={saving}
+                >
+                  <Save size={16} style={{ marginRight: '4px' }} />
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={submitting}
+                >
+                  <Send size={16} style={{ marginRight: '4px' }} />
+                  {submitting ? 'Publishing...' : 'Publish'}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* Publish Results Modal */}
+      {showPublishResultsModal && publishResults && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '12px',
+            boxSizing: 'border-box'
+          }}
+          onClick={() => setShowPublishResultsModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '8px',
+              width: '90%',
+              maxWidth: '700px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+              boxSizing: 'border-box',
+              color: '#002329',
+              fontFamily: 'Poppins',
+              fontSize: '14px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              flexShrink: 0
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                {publishResults.failed.length > 0 ? (
+                  <XCircle size={24} color="#ef4444" />
+                ) : (
+                  <CheckCircle size={24} color="#10b981" />
+                )}
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '20px',
+                  fontWeight: 600,
+                  color: '#002329',
+                  fontFamily: 'Poppins'
+                }}>
+                  Publish Results
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowPublishResultsModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                <X size={20} color="#64748b" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{
+              padding: '24px',
+              overflowY: 'auto',
+              flex: 1
+            }}>
+              {/* Published Objects */}
+              {publishResults.published.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <h3 style={{
+                    margin: '0 0 16px 0',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#10b981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <CheckCircle size={18} />
+                    Published Successfully ({publishResults.published.length})
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    {publishResults.published.map((obj, index) => (
+                      <div key={index} style={{
+                        padding: '16px',
+                        backgroundColor: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          fontWeight: 600,
+                          color: '#002329',
+                          marginBottom: '8px'
+                        }}>
+                          {obj.type}: "{obj.name}"
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Failed Objects */}
+              {publishResults.failed.length > 0 && (
+                <div>
+                  <h3 style={{
+                    margin: '0 0 16px 0',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <XCircle size={18} />
+                    Failed to Publish ({publishResults.failed.length})
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    {publishResults.failed.map((obj, index) => (
+                      <div key={index} style={{
+                        padding: '16px',
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          fontWeight: 600,
+                          color: '#002329',
+                          marginBottom: '8px'
+                        }}>
+                          {obj.type}: "{obj.name}"
+                        </div>
+                        <div style={{
+                          fontSize: '13px',
+                          color: '#ef4444',
+                          marginTop: '8px'
+                        }}>
+                          Error: {obj.error}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              flexShrink: 0
+            }}>
+              <button
+                onClick={() => {
+                  setShowPublishResultsModal(false);
+                  if (publishResults.failed.length === 0) {
+                    setTimeout(() => {
+                      navigate('/dashboard');
+                    }, 500);
+                  }
+                }}
+                style={{
+                  padding: '6px 12px',
+                  backgroundColor: '#08979C',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#067a7f'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#08979C'}
+              >
+                {publishResults.failed.length === 0 ? 'Continue' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default ProjectPageSetup;
+

@@ -1,0 +1,2631 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useForm } from 'react-hook-form';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import { saveDraftQuickSetup, loadDraftQuickSetup, deleteDraftQuickSetup } from '../utils/draftStorage';
+import { getErrorMessage, handleError } from '../utils/errorHandler';
+import { sanitizeObject } from '../utils/security';
+import { Search, Info, Menu, Send, Save, X, LogOut, Sparkles, Plus, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import { 
+  ProjectTeamSection, 
+  CreateProjectSection, 
+  CreateProjectObjectiveSection, 
+  CreateQualificationStepSection, 
+  CreateProjectPageSection, 
+  DynamicFieldsSection 
+} from './QuickSetupWizard/components';
+import '../styles/ProjectSetup.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+
+// Countries list
+const COUNTRIES = [
+  'Afghanistan', 'Aland Islands', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Anguilla', 'Antarctica',
+  'Antigua and Barbuda', 'Argentina', 'Armenia', 'Aruba', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas',
+  'Bahrain', 'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bermuda', 'Bhutan',
+  'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Bouvet Island', 'Brazil', 'British Indian Ocean Territory',
+  'Brunei Darussalam', 'Bulgaria', 'Burkina Faso', 'Burundi', 'Cambodia', 'Cameroon', 'Canada', 'Cape Verde',
+  'Cayman Islands', 'Central African Republic', 'Chad', 'Chile', 'China', 'Christmas Island', 'Cocos (Keeling) Islands',
+  'Colombia', 'Comoros', 'Congo', 'Congo, The Democratic Republic of The', 'Cook Islands', 'Costa Rica',
+  'Cote D\'Ivoire', 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark', 'Djibouti', 'Dominica',
+  'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador', 'Equatorial Guinea', 'Eritrea', 'Estonia', 'Ethiopia',
+  'Falkland Islands (Malvinas)', 'Faroe Islands', 'Fiji', 'Finland', 'France', 'French Guiana', 'French Polynesia',
+  'French Southern Territories', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Gibraltar', 'Greece',
+  'Greenland', 'Grenada', 'Guadeloupe', 'Guam', 'Guatemala', 'Guernsey', 'Guinea', 'Guinea-Bissau',
+  'Guyana', 'Haiti', 'Heard Island and Mcdonald Islands', 'Holy See (Vatican City State)', 'Honduras',
+  'Hong Kong', 'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran, Islamic Republic of', 'Iraq', 'Ireland',
+  'Isle of Man', 'Israel', 'Italy', 'Jamaica', 'Japan', 'Jersey', 'Jordan', 'Kazakhstan', 'Kenya',
+  'Kiribati', 'Korea, Democratic People\'s Republic of', 'Korea, Republic of', 'Kuwait', 'Kyrgyzstan',
+  'Lao People\'s Democratic Republic', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia', 'Libyan Arab Jamahiriya',
+  'Liechtenstein', 'Lithuania', 'Luxembourg', 'Macao', 'Macedonia, The Former Yugoslav Republic of',
+  'Madagascar', 'Malawi', 'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Martinique',
+  'Mauritania', 'Mauritius', 'Mayotte', 'Mexico', 'Micronesia, Federated States of', 'Moldova, Republic of',
+  'Monaco', 'Mongolia', 'Montenegro', 'Montserrat', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia',
+  'Nauru', 'Nepal', 'Netherlands', 'Netherlands Antilles', 'New Caledonia', 'New Zealand', 'Nicaragua',
+  'Niger', 'Nigeria', 'Niue', 'Norfolk Island', 'Northern Mariana Islands', 'Norway', 'Oman', 'Pakistan',
+  'Palau', 'Palestinian Territory, Occupied', 'Panama', 'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines',
+  'Pitcairn', 'Poland', 'Portugal', 'Puerto Rico', 'Qatar', 'Reunion', 'Romania', 'Russian Federation',
+  'Rwanda', 'Saint Helena', 'Saint Kitts and Nevis', 'Saint Lucia', 'Saint Pierre and Miquelon',
+  'Saint Vincent and The Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe', 'Saudi Arabia',
+  'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore', 'Slovakia', 'Slovenia', 'Solomon Islands',
+  'Somalia', 'South Africa', 'South Georgia and The South Sandwich Islands', 'Spain', 'Sri Lanka',
+  'Sudan', 'Suriname', 'Svalbard and Jan Mayen', 'Swaziland', 'Sweden', 'Switzerland', 'Syrian Arab Republic',
+  'Taiwan, Province of China', 'Tajikistan', 'Tanzania, United Republic of', 'Thailand', 'Timor-Leste',
+  'Togo', 'Tokelau', 'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Turks and Caicos Islands',
+  'Tuvalu', 'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States', 'United States Minor Outlying Islands',
+  'Uruguay', 'Uzbekistan', 'Vanuatu', 'Venezuela', 'Viet Nam', 'Virgin Islands, British', 'Virgin Islands, U.S.',
+  'Wallis and Futuna', 'Western Sahara', 'Yemen', 'Zambia', 'Zimbabwe'
+];
+
+// Dialects list (sample - can be expanded)
+const DIALECTS = [
+  'Abkhazian', 'Adamawa Fulfulde', 'Adilabad Gondi', 'Afar', 'Afrikaans', 'Aheri Gondi', 'Akan', 'Albanian',
+  'Albay Bicolano', 'Algerian Arabic', 'Algerian Saharan Arabic', 'Amharic', 'Arabic', 'Armenian', 'Assamese',
+  'Azerbaijani', 'Bambara', 'Bangla', 'Basque', 'Belarusian', 'Bengali', 'Bhojpuri', 'Bosnian', 'Bulgarian',
+  'Burmese', 'Catalan', 'Cebuano', 'Chewa', 'Chinese (Simplified)', 'Chinese (Traditional)', 'Chittagonian',
+  'Croatian', 'Czech', 'Danish', 'Dutch', 'English', 'Estonian', 'Filipino', 'Finnish', 'French', 'Fula',
+  'Galician', 'Georgian', 'German', 'Greek', 'Gujarati', 'Haitian Creole', 'Hausa', 'Hebrew', 'Hindi',
+  'Hmong', 'Hungarian', 'Igbo', 'Indonesian', 'Irish', 'Italian', 'Japanese', 'Javanese', 'Kannada',
+  'Kazakh', 'Khmer', 'Kinyarwanda', 'Korean', 'Kurdish', 'Lao', 'Latin', 'Latvian', 'Lithuanian',
+  'Luxembourgish', 'Macedonian', 'Malagasy', 'Malay', 'Malayalam', 'Maltese', 'Mandarin', 'Marathi',
+  'Mongolian', 'Nepali', 'Norwegian', 'Odia', 'Oromo', 'Pashto', 'Persian', 'Polish', 'Portuguese',
+  'Punjabi', 'Romanian', 'Russian', 'Samoan', 'Serbian', 'Shona', 'Sindhi', 'Sinhala', 'Slovak',
+  'Slovenian', 'Somali', 'Spanish', 'Sundanese', 'Swahili', 'Swedish', 'Tagalog', 'Tamil', 'Telugu',
+  'Thai', 'Turkish', 'Ukrainian', 'Urdu', 'Uzbek', 'Vietnamese', 'Welsh', 'Xhosa', 'Yiddish', 'Yoruba', 'Zulu'
+];
+
+const QuickSetupWizard = () => {
+  const navigate = useNavigate();
+  const { user, hasPermission, logout } = useAuth();
+  const { register, handleSubmit, setValue, watch, formState: { errors }, trigger, setError, clearErrors, reset } = useForm();
+  const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [showPublishResultsModal, setShowPublishResultsModal] = useState(false);
+  const [publishResults, setPublishResults] = useState(null);
+  
+  // Add Field functionality states
+  const [showAddFieldDropdown, setShowAddFieldDropdown] = useState(false);
+  const [availableFields, setAvailableFields] = useState([]);
+  const [loadingFields, setLoadingFields] = useState(false);
+  const [fieldSearchTerm, setFieldSearchTerm] = useState('');
+  const [selectedSection, setSelectedSection] = useState('');
+  const [addedFields, setAddedFields] = useState(new Set()); // Track newly added fields
+  const [fieldValues, setFieldValues] = useState({}); // Track values for added fields
+  const addFieldDropdownRef = useRef(null);
+  
+  // Project Team section states
+  const [teamMembers, setTeamMembers] = useState([{ member: '', memberId: '', role: '' }]);
+  const [teamMemberSearchResults, setTeamMemberSearchResults] = useState({});
+  const [loadingTeamMemberSearch, setLoadingTeamMemberSearch] = useState({});
+  const teamMemberSearchTimeoutRefs = useRef({});
+
+  // Project section states
+  const [projectManagerSearchTerm, setProjectManagerSearchTerm] = useState('');
+  const [projectManagerSearchResults, setProjectManagerSearchResults] = useState([]);
+  const [loadingProjectManagerSearch, setLoadingProjectManagerSearch] = useState(false);
+  const [showProjectManagerDropdown, setShowProjectManagerDropdown] = useState(false);
+  const projectManagerSearchTimeoutRef = useRef(null);
+  const projectManagerAbortControllerRef = useRef(null);
+  const dataLoadedRef = useRef(false);
+  const projectManagerSearchCacheRef = useRef(new Map()); // Cache for search results
+  const [accounts, setAccounts] = useState([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [accountSearchTerm, setAccountSearchTerm] = useState('');
+  const [accountSearchResults, setAccountSearchResults] = useState([]);
+  const [showAccountDropdown, setShowAccountDropdown] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState(null);
+
+  // Project Objective section states
+  const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [projectSearchTerm, setProjectSearchTerm] = useState('');
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showProjectDropdown, setShowProjectDropdown] = useState(false);
+
+  // Qualification Step section states
+  const [projectObjectives, setProjectObjectives] = useState([]);
+  const [loadingProjectObjectives, setLoadingProjectObjectives] = useState(false);
+  const [projectObjectiveSearchTerm, setProjectObjectiveSearchTerm] = useState('');
+  const [selectedProjectObjective, setSelectedProjectObjective] = useState(null);
+  const [showProjectObjectiveDropdown, setShowProjectObjectiveDropdown] = useState(false);
+  const [qualificationSteps, setQualificationSteps] = useState([]);
+  const [loadingQualificationSteps, setLoadingQualificationSteps] = useState(false);
+  const [qualificationStepSearchTerm, setQualificationStepSearchTerm] = useState('');
+  const [selectedQualificationStep, setSelectedQualificationStep] = useState(null);
+  const [showQualificationStepDropdown, setShowQualificationStepDropdown] = useState(false);
+
+  // Project Page section states
+  const [pageProjects, setPageProjects] = useState([]);
+  const [loadingPageProjects, setLoadingPageProjects] = useState(false);
+  const [pageProjectSearchTerm, setPageProjectSearchTerm] = useState('');
+  const [selectedPageProject, setSelectedPageProject] = useState(null);
+  const [showPageProjectDropdown, setShowPageProjectDropdown] = useState(false);
+  const [pageProjectObjectives, setPageProjectObjectives] = useState([]);
+  const [loadingPageProjectObjectives, setLoadingPageProjectObjectives] = useState(false);
+  const [pageProjectObjectiveSearchTerm, setPageProjectObjectiveSearchTerm] = useState('');
+  const [selectedPageProjectObjective, setSelectedPageProjectObjective] = useState(null);
+  const [showPageProjectObjectiveDropdown, setShowPageProjectObjectiveDropdown] = useState(false);
+  const [pageQualificationSteps, setPageQualificationSteps] = useState([]);
+  const [loadingPageQualificationSteps, setLoadingPageQualificationSteps] = useState(false);
+  const [pageQualificationStepSearchTerm, setPageQualificationStepSearchTerm] = useState('');
+  const [selectedPageQualificationStep, setSelectedPageQualificationStep] = useState(null);
+  const [showPageQualificationStepDropdown, setShowPageQualificationStepDropdown] = useState(false);
+  // Qualification field for Default Qualification Page (retrieves from Qualification_Step__c)
+  const [pageProjectQualifications, setPageProjectQualifications] = useState([]);
+  const [loadingPageProjectQualifications, setLoadingPageProjectQualifications] = useState(false);
+  const [pageProjectQualificationSearchTerm, setPageProjectQualificationSearchTerm] = useState('');
+  const [selectedPageProjectQualification, setSelectedPageProjectQualification] = useState(null);
+  const [showPageProjectQualificationDropdown, setShowPageProjectQualificationDropdown] = useState(false);
+
+  useEffect(() => {
+    // Load existing quick setup data from server storage
+    const loadExistingData = async () => {
+      try {
+        const data = await loadDraftQuickSetup();
+        if (data) {
+          // Populate form with existing data
+          Object.keys(data).forEach(key => {
+            if (data[key] !== null && data[key] !== undefined) {
+              setValue(key, data[key]);
+            }
+          });
+
+          // Load search terms and selected items
+          if (data.projectManagerName) {
+            setProjectManagerSearchTerm(data.projectManagerName);
+          }
+          if (data.projectManager) {
+            // If we have an ID, keep it; if we only have a name, use it
+            setValue('projectManager', data.projectManager);
+          }
+          if (data.account) {
+            setAccountSearchTerm(data.account);
+            setSelectedAccount(data.account);
+            setValue('account', data.account);
+          }
+          if (data.project) {
+            setProjectSearchTerm(data.project);
+            setSelectedProject(data.project);
+            setValue('qualificationStepProject', data.project);
+            fetchProjectObjectives(data.project);
+          }
+          if (data.projectObjective) {
+            setProjectObjectiveSearchTerm(data.projectObjective);
+            setSelectedProjectObjective(data.projectObjective);
+            setValue('qualificationStepProjectObjective', data.projectObjective);
+            fetchQualificationSteps(data.projectObjective);
+          }
+          if (data.contributorFacingProjectName) {
+            setValue('qualificationStepProjectObjective', data.contributorFacingProjectName);
+          }
+          if (data.country) {
+            setValue('country', data.country);
+          }
+          if (data.language) {
+            setValue('language', data.language);
+          }
+          if (data.qualificationStep) {
+            setQualificationStepSearchTerm(data.qualificationStep);
+            setSelectedQualificationStep(data.qualificationStep);
+          }
+          if (data.teamMembers && Array.isArray(data.teamMembers) && data.teamMembers.length > 0) {
+            setTeamMembers(data.teamMembers);
+          }
+          if (data.pageProject) {
+            setPageProjectSearchTerm(data.pageProject);
+            setSelectedPageProject(data.pageProject);
+            fetchPageProjectObjectives(data.pageProject);
+          }
+          if (data.pageProjectObjective) {
+            setPageProjectObjectiveSearchTerm(data.pageProjectObjective);
+            setSelectedPageProjectObjective(data.pageProjectObjective);
+            fetchPageQualificationSteps(data.pageProjectObjective);
+          }
+          if (data.pageQualificationStep) {
+            setPageQualificationStepSearchTerm(data.pageQualificationStep);
+            setSelectedPageQualificationStep(data.pageQualificationStep);
+          }
+
+          toast.success('Quick setup data loaded for editing');
+        }
+      } catch (error) {
+        handleError(error, 'QuickSetupWizard - loadDraftQuickSetup');
+      }
+    };
+
+    loadExistingData();
+    fetchAccounts();
+    fetchAvailableFields();
+  }, [setValue]);
+  
+  // Fetch available fields from API
+  const fetchAvailableFields = async () => {
+    setLoadingFields(true);
+    try {
+      const response = await apiClient.get('/projects/field-definitions');
+      if (response.data.success) {
+        setAvailableFields(response.data.fields || []);
+      }
+    } catch (error) {
+      handleError(error, 'QuickSetupWizard - fetchAvailableFields');
+    } finally {
+      setLoadingFields(false);
+    }
+  };
+  
+  // Get currently displayed fields (hardcoded fields in the form)
+  const getCurrentFields = () => {
+    return new Set([
+      'projectName', 'shortProjectName', 'contributorProjectName', 'appenPartner', 'projectType', 'projectPriority',
+      'account', 'hireStartDate', 'predictedCloseDate', 'projectStatus', 'projectManager',
+      'contributorFacingProjectName', 'projectObjectiveName', 'project', 'workType', 'daysBetweenReminderEmails', 'country', 'language',
+      'qualificationStepProject', 'qualificationStepProjectObjective', 'qualificationStep', 'funnel', 'stepNumber', 'numberOfAttempts',
+      'projectPageType', 'pageProject', 'pageProjectObjective', 'pageQualificationStep', 'pageProjectQualification', 'active'
+    ]);
+  };
+  
+  // Get available fields that are not currently displayed and not already added
+  const getAvailableFieldsToAdd = () => {
+    const currentFields = getCurrentFields();
+    return availableFields.filter(field => 
+      !currentFields.has(field.key) && !addedFields.has(field.key)
+    );
+  };
+  
+  // Pre-process available fields for faster search (memoized) - ULTRA OPTIMIZED
+  const preprocessedFields = useMemo(() => {
+    const currentFields = getCurrentFields();
+    const filtered = availableFields.filter(field => 
+      !currentFields.has(field.key) && !addedFields.has(field.key)
+    );
+    
+    // Pre-compute all searchable data once
+    return filtered.map(field => {
+      const label = field.label;
+      const desc = field.description || '';
+      const key = field.key;
+      const labelLower = label.toLowerCase();
+      const descLower = desc.toLowerCase();
+      const keyLower = key.toLowerCase();
+      
+      return {
+        ...field,
+        // Pre-compute lowercase strings for faster search
+        _labelLower: labelLower,
+        _descLower: descLower,
+        _keyLower: keyLower,
+        // Pre-compute searchable text (all searchable content in one string)
+        _searchText: `${labelLower} ${descLower} ${keyLower}`,
+        // Pre-compute words array for word-based search (faster for multi-word queries)
+        _words: `${labelLower} ${descLower} ${keyLower}`.split(/\s+/).filter(w => w.length > 0)
+      };
+    });
+  }, [availableFields, addedFields]);
+  
+  // Create section index for instant section filtering
+  const sectionIndex = useMemo(() => {
+    const index = new Map();
+    preprocessedFields.forEach(field => {
+      const section = field.section;
+      if (!index.has(section)) {
+        index.set(section, []);
+      }
+      index.get(section).push(field);
+    });
+    return index;
+  }, [preprocessedFields]);
+  
+  // Ultra-fast debounced search - reduced to 100ms for near-instant response
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  useEffect(() => {
+    // For very short terms (1-2 chars), use shorter debounce for instant feedback
+    const debounceTime = fieldSearchTerm.length <= 2 ? 50 : 100;
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(fieldSearchTerm);
+    }, debounceTime);
+    
+    return () => clearTimeout(timer);
+  }, [fieldSearchTerm]);
+  
+  // Handle clicking outside dropdown to close it
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (addFieldDropdownRef.current && !addFieldDropdownRef.current.contains(event.target)) {
+        setShowAddFieldDropdown(false);
+      }
+    };
+    
+    if (showAddFieldDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAddFieldDropdown]);
+  
+  // Ultra-optimized field filtering with performance measurements
+  const { filteredFields, totalFilteredCount } = useMemo(() => {
+    const startTime = performance.now();
+    
+    // Step 1: Get base dataset (use section index for instant filtering)
+    let filtered;
+    if (selectedSection && sectionIndex.has(selectedSection)) {
+      // Instant section lookup using index (O(1) instead of O(n))
+      filtered = sectionIndex.get(selectedSection);
+    } else {
+      filtered = preprocessedFields;
+    }
+    
+    // Step 2: Apply search filter (optimized for different search lengths)
+    if (debouncedSearchTerm && debouncedSearchTerm.length >= 1) {
+      const searchLower = debouncedSearchTerm.toLowerCase().trim();
+      const searchWords = searchLower.split(/\s+/).filter(w => w.length > 0);
+      
+      if (searchWords.length === 1) {
+        // Single word search - use fastest method
+        const searchWord = searchWords[0];
+        // Try startsWith first (fastest), then includes
+        filtered = filtered.filter(field => {
+          // Check if any word starts with search term (fastest match)
+          if (field._labelLower.startsWith(searchWord) || 
+              field._keyLower.startsWith(searchWord)) {
+            return true;
+          }
+          // Fallback to includes for partial matches
+          return field._searchText.includes(searchWord);
+        });
+      } else {
+        // Multi-word search - check if all words are present
+        filtered = filtered.filter(field => {
+          // All search words must be present in the searchable text
+          return searchWords.every(word => field._searchText.includes(word));
+        });
+      }
+    }
+    
+    const totalCount = filtered.length;
+    // Limit results to first 50 for better rendering performance
+    const limited = filtered.slice(0, 50);
+    
+    const endTime = performance.now();
+    // Log performance in development mode
+    
+    return { filteredFields: limited, totalFilteredCount: totalCount };
+  }, [debouncedSearchTerm, selectedSection, preprocessedFields, sectionIndex]);
+  
+  // Handle adding a field
+  const handleAddField = (field) => {
+    setAddedFields(prev => new Set([...prev, field.key]));
+    setFieldValues(prev => ({ ...prev, [field.key]: field.default || '' }));
+    setShowAddFieldDropdown(false);
+    setFieldSearchTerm('');
+    setSelectedSection('');
+    toast.success(`Field "${field.label}" added successfully`);
+  };
+  
+  // Handle removing an added field
+  const handleRemoveField = (fieldKey) => {
+    setAddedFields(prev => {
+      const newSet = new Set(prev);
+      newSet.delete(fieldKey);
+      return newSet;
+    });
+    setFieldValues(prev => {
+      const newValues = { ...prev };
+      delete newValues[fieldKey];
+      return newValues;
+    });
+    setValue(fieldKey, '');
+    toast.success('Field removed');
+  };
+  
+  // Check if field has value
+  const fieldHasValue = (fieldKey) => {
+    const value = watch(fieldKey) || fieldValues[fieldKey];
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    if (typeof value === 'boolean') return true;
+    return true;
+  };
+  
+  // Get sections for filter dropdown - get from all available fields, not just filtered ones
+  const sections = useMemo(() => {
+    const sectionsSet = new Set();
+    // Get sections from ALL available fields, regardless of whether they're in the form
+    // This allows users to see all sections and filter by them
+    availableFields.forEach(field => {
+      if (field.section) {
+        sectionsSet.add(field.section);
+      }
+    });
+    return Array.from(sectionsSet).sort();
+  }, [availableFields]);
+
+  // Fetch accounts
+  const fetchAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const response = await apiClient.get('/salesforce/accounts');
+      if (response.data.success) {
+        setAccounts(response.data.accounts || []);
+      }
+    } catch (error) {
+      handleError(error, 'QuickSetupWizard - fetchAccounts');
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  // Search accounts when search term changes
+  useEffect(() => {
+    if (!accountSearchTerm || accountSearchTerm.trim() === '') {
+      setAccountSearchResults([]);
+      setShowAccountDropdown(false);
+      return;
+    }
+
+    const searchAccounts = () => {
+      const searchTerm = accountSearchTerm.toLowerCase().trim();
+      const filtered = accounts.filter(account => 
+        account.name.toLowerCase().includes(searchTerm)
+      );
+      setAccountSearchResults(filtered);
+      setShowAccountDropdown(filtered.length > 0);
+    };
+
+    const timeoutId = setTimeout(searchAccounts, 300);
+    return () => clearTimeout(timeoutId);
+  }, [accountSearchTerm, accounts]);
+
+  // Handle account select
+  const handleAccountSelect = (account) => {
+    setAccountSearchTerm(account.name);
+    setSelectedAccount(account.name);
+    setValue('account', account.name);
+    setShowAccountDropdown(false);
+    setAccountSearchResults([]);
+  };
+
+  // Auto-update Project field in Qualification Step section when project name changes in Create Project section
+  const projectName = watch('projectName');
+  useEffect(() => {
+    if (projectName && projectName.trim() !== '') {
+      // Update Qualification Step section's Project field
+      setValue('qualificationStepProject', projectName);
+      // Also update Project Objective section's Project field
+      setValue('project', projectName);
+      setProjectSearchTerm(projectName);
+      setSelectedProject(projectName);
+      // Update Project Page section's Project field
+      setValue('pageProject', projectName);
+      setPageProjectSearchTerm(projectName);
+      setSelectedPageProject(projectName);
+      // Fetch project objectives for the new project
+      fetchProjectObjectives(projectName);
+    }
+  }, [projectName, setValue]);
+
+  // Auto-update Qualification Step section's Project Objective when Project Objective section's value changes
+  const contributorFacingProjectName = watch('contributorFacingProjectName');
+  const projectObjectiveName = watch('projectObjectiveName');
+  useEffect(() => {
+    // Use projectObjectiveName if available, otherwise use contributorFacingProjectName
+    const objectiveName = projectObjectiveName || contributorFacingProjectName;
+    if (objectiveName) {
+      setValue('qualificationStepProjectObjective', objectiveName);
+    }
+  }, [projectObjectiveName, contributorFacingProjectName, setValue]);
+
+  // Auto-update Project Page section's Project Objective when Qualification Step section's Project Objective changes
+  const qualificationStepProjectObjective = watch('qualificationStepProjectObjective');
+  useEffect(() => {
+    if (qualificationStepProjectObjective && (!pageProjectObjectiveSearchTerm || pageProjectObjectiveSearchTerm === '')) {
+      setPageProjectObjectiveSearchTerm(qualificationStepProjectObjective);
+      setSelectedPageProjectObjective(qualificationStepProjectObjective);
+      setValue('pageProjectObjective', qualificationStepProjectObjective);
+      if (selectedPageProject) {
+        fetchPageQualificationSteps(qualificationStepProjectObjective);
+      }
+    }
+  }, [qualificationStepProjectObjective, pageProjectObjectiveSearchTerm, selectedPageProject, setValue]);
+
+  // Auto-update Project Page section's Project Objective when Project Objective section's Project Objective Name changes
+  useEffect(() => {
+    // Use Project Objective Name if available, otherwise use contributorFacingProjectName
+    const objectiveName = projectObjectiveName || contributorFacingProjectName;
+    if (objectiveName && objectiveName.trim() !== '') {
+      setPageProjectObjectiveSearchTerm(objectiveName);
+      setSelectedPageProjectObjective(objectiveName);
+      setValue('pageProjectObjective', objectiveName);
+      if (selectedPageProject) {
+        fetchPageQualificationSteps(objectiveName);
+      }
+    }
+  }, [projectObjectiveName, contributorFacingProjectName, selectedPageProject, setValue]);
+
+  // Search project manager function (same as Create Project page)
+  const searchProjectManager = async (searchTerm) => {
+    if (!searchTerm || searchTerm.trim().length < 2) {
+      setProjectManagerSearchResults([]);
+      return;
+    }
+
+    // Cancel previous request if it exists
+    if (projectManagerAbortControllerRef.current) {
+      projectManagerAbortControllerRef.current.abort();
+    }
+
+    // Create new AbortController for this request
+    const abortController = new AbortController();
+    projectManagerAbortControllerRef.current = abortController;
+
+    const trimmedTerm = searchTerm.trim().toLowerCase();
+    
+    // Check cache first (case-insensitive) - instant return
+    if (projectManagerSearchCacheRef.current.has(trimmedTerm)) {
+      const cachedResults = projectManagerSearchCacheRef.current.get(trimmedTerm);
+      setProjectManagerSearchResults(cachedResults);
+      if (cachedResults.length > 0) {
+        setShowProjectManagerDropdown(true);
+      }
+      return;
+    }
+
+    // Check for partial matches in cache (for multi-word searches)
+    // Find the best matching cached result (longest match)
+    let bestCachedMatch = null;
+    let bestMatchLength = 0;
+    for (const [cachedTerm, cachedResults] of projectManagerSearchCacheRef.current.entries()) {
+      // Check if current search term starts with cached term or vice versa
+      if (trimmedTerm.startsWith(cachedTerm) || cachedTerm.startsWith(trimmedTerm)) {
+        const matchLength = Math.min(trimmedTerm.length, cachedTerm.length);
+        if (matchLength > bestMatchLength && cachedResults.length > 0) {
+          bestMatchLength = matchLength;
+          bestCachedMatch = cachedResults;
+        }
+      }
+    }
+
+    // If we have a good partial match, show it immediately while searching
+    if (bestCachedMatch && bestCachedMatch.length > 0) {
+      setProjectManagerSearchResults(bestCachedMatch);
+      setShowProjectManagerDropdown(true);
+      // Don't set loading state if we have cached results to show
+    } else {
+      setLoadingProjectManagerSearch(true);
+    }
+
+    try {
+      // Pass recordType parameter to filter by Project Manager record type
+      // Use longer timeout for Salesforce API calls (30s)
+      const response = await apiClient.get(`/salesforce/search-people?search=${encodeURIComponent(searchTerm)}&recordType=Project_Manager`, {
+        signal: abortController.signal,
+        timeout: 30000 // 30 seconds for Salesforce API calls
+      });
+      if (response.data.success) {
+        const people = response.data.people || [];
+        // Cache the results (case-insensitive key)
+        projectManagerSearchCacheRef.current.set(trimmedTerm, people);
+        // Limit cache size to prevent memory issues
+        if (projectManagerSearchCacheRef.current.size > 50) {
+          const firstKey = projectManagerSearchCacheRef.current.keys().next().value;
+          projectManagerSearchCacheRef.current.delete(firstKey);
+        }
+        
+        // Update results (may have been showing cached partial match)
+        setProjectManagerSearchResults(people);
+        // Show dropdown if there are results
+        if (people.length > 0) {
+          setShowProjectManagerDropdown(true);
+        }
+      } else {
+        // Only clear results if we didn't have a cached match
+        if (!bestCachedMatch) {
+          setProjectManagerSearchResults([]);
+        }
+      }
+    } catch (error) {
+      // Ignore aborted requests (user typed new character)
+      if (error.name === 'AbortError' || error.name === 'CanceledError' || 
+          (error.code === 'ECONNABORTED' && abortController?.signal?.aborted)) {
+        return; // Request was cancelled, don't show error
+      }
+      
+      // Handle non-aborted errors
+      
+      // Only clear results if we didn't have a cached match
+      if (!bestCachedMatch) {
+        setProjectManagerSearchResults([]);
+      }
+    } finally {
+      // Only clear loading state if this request wasn't aborted
+      if (!abortController?.signal?.aborted) {
+        setLoadingProjectManagerSearch(false);
+      }
+    }
+  };
+
+  // Search projects for Project Objective section
+  useEffect(() => {
+    if (!projectSearchTerm || projectSearchTerm.trim() === '' || projectSearchTerm === selectedProject) {
+      setProjects([]);
+      return;
+    }
+
+    const searchProjects = async () => {
+      setLoadingProjects(true);
+      try {
+        const response = await apiClient.get(`/salesforce/search-projects?search=${encodeURIComponent(projectSearchTerm)}`);
+        if (response.data.success) {
+          setProjects(response.data.projects || []);
+          setShowProjectDropdown(true);
+        }
+      } catch (error) {
+        handleError(error, 'QuickSetupWizard - searchProjects');
+        setProjects([]);
+      } finally {
+        setLoadingProjects(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      searchProjects();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [projectSearchTerm, selectedProject]);
+
+  // Fetch project objectives when project is selected
+  const fetchProjectObjectives = async (projectName) => {
+    if (!projectName) return;
+    setLoadingProjectObjectives(true);
+    try {
+      const response = await apiClient.get(`/salesforce/project-objectives?project=${encodeURIComponent(projectName)}`);
+      if (response.data.success) {
+        setProjectObjectives(response.data.objectives || []);
+      }
+    } catch (error) {
+      handleError(error, 'QuickSetupWizard - fetchProjectObjectives');
+    } finally {
+      setLoadingProjectObjectives(false);
+    }
+  };
+
+  // Search project objectives for Qualification Step section
+  useEffect(() => {
+    if (!projectObjectiveSearchTerm || projectObjectiveSearchTerm.trim() === '' || projectObjectiveSearchTerm === selectedProjectObjective) {
+      setProjectObjectives([]);
+      return;
+    }
+
+    const searchProjectObjectives = async () => {
+      if (!selectedProject) return;
+      setLoadingProjectObjectives(true);
+      try {
+        const response = await apiClient.get(`/salesforce/search-project-objectives?search=${encodeURIComponent(projectObjectiveSearchTerm)}&project=${encodeURIComponent(selectedProject)}`);
+        if (response.data.success) {
+          setProjectObjectives(response.data.objectives || []);
+          setShowProjectObjectiveDropdown(true);
+        }
+      } catch (error) {
+        handleError(error, 'QuickSetupWizard - searchProjectObjectives');
+        setProjectObjectives([]);
+      } finally {
+        setLoadingProjectObjectives(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      searchProjectObjectives();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [projectObjectiveSearchTerm, selectedProjectObjective, selectedProject]);
+
+  // Fetch qualification steps when project objective is selected
+  const fetchQualificationSteps = async (projectObjectiveName) => {
+    if (!projectObjectiveName) return;
+    setLoadingQualificationSteps(true);
+    try {
+      // Get the selected project name for filtering
+      const selectedProjectName = watch('qualificationStepProject') || watch('projectName') || projectSearchTerm || selectedProject;
+      const params = new URLSearchParams();
+      if (projectObjectiveName) {
+        params.append('search', projectObjectiveName);
+      }
+      if (selectedProjectName) {
+        params.append('project', selectedProjectName);
+      }
+      const response = await apiClient.get(`/salesforce/qualification-steps?${params.toString()}`);
+      if (response.data.success) {
+        setQualificationSteps(response.data.qualificationSteps || response.data.steps || []);
+      }
+    } catch (error) {
+      handleError(error, 'QuickSetupWizard - fetchQualificationSteps');
+    } finally {
+      setLoadingQualificationSteps(false);
+    }
+  };
+
+  // Get watched project value for qualification step filtering
+  const qualificationStepProject = watch('qualificationStepProject');
+
+  // Search qualification steps - search ALL qualification steps from Qualification_Step__c in Salesforce (NOT filtered by project)
+  useEffect(() => {
+    // Don't search if search term is empty
+    if (!qualificationStepSearchTerm || qualificationStepSearchTerm.trim() === '') {
+      setQualificationSteps([]);
+      return;
+    }
+
+    // Don't search if the search term matches the selected qualification step
+    if (selectedQualificationStep && qualificationStepSearchTerm === selectedQualificationStep) {
+      setQualificationSteps([]);
+      return;
+    }
+
+    const fetchQualificationSteps = async () => {
+      setLoadingQualificationSteps(true);
+      try {
+        // Build query parameters - only include search term, NO project filter
+        const params = new URLSearchParams();
+        params.append('search', qualificationStepSearchTerm);
+        // Do NOT append project parameter - search all qualification steps across Salesforce
+        
+        const response = await apiClient.get(`/salesforce/qualification-steps?${params.toString()}`);
+        if (response.data.success) {
+          setQualificationSteps(response.data.qualificationSteps || []);
+          setShowQualificationStepDropdown(true);
+        } else {
+          setQualificationSteps([]);
+        }
+      } catch (error) {
+        handleError(error, 'QuickSetupWizard - fetchQualificationSteps');
+        setQualificationSteps([]);
+      } finally {
+        setLoadingQualificationSteps(false);
+      }
+    };
+
+    // Debounce search - wait 300ms after user stops typing
+    const timeoutId = setTimeout(() => {
+      fetchQualificationSteps();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [qualificationStepSearchTerm, selectedQualificationStep]);
+
+  // Search projects for Project Page section
+  useEffect(() => {
+    if (!pageProjectSearchTerm || pageProjectSearchTerm.trim() === '' || pageProjectSearchTerm === selectedPageProject) {
+      setPageProjects([]);
+      return;
+    }
+
+    const searchProjects = async () => {
+      setLoadingPageProjects(true);
+      try {
+        const response = await apiClient.get(`/salesforce/search-projects?search=${encodeURIComponent(pageProjectSearchTerm)}`);
+        if (response.data.success) {
+          setPageProjects(response.data.projects || []);
+          setShowPageProjectDropdown(true);
+        }
+      } catch (error) {
+        handleError(error, 'QuickSetupWizard - searchPageProjects');
+        setPageProjects([]);
+      } finally {
+        setLoadingPageProjects(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      searchProjects();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [pageProjectSearchTerm, selectedPageProject]);
+
+  // Fetch project objectives for Project Page section
+  const fetchPageProjectObjectives = async (projectName) => {
+    if (!projectName) return;
+    setLoadingPageProjectObjectives(true);
+    try {
+      const response = await apiClient.get(`/salesforce/project-objectives?project=${encodeURIComponent(projectName)}`);
+      if (response.data.success) {
+        setPageProjectObjectives(response.data.objectives || []);
+      }
+    } catch (error) {
+      handleError(error, 'QuickSetupWizard - fetchPageProjectObjectives');
+    } finally {
+      setLoadingPageProjectObjectives(false);
+    }
+  };
+
+  // Search project objectives for Project Page section
+  useEffect(() => {
+    if (!pageProjectObjectiveSearchTerm || pageProjectObjectiveSearchTerm.trim() === '' || pageProjectObjectiveSearchTerm === selectedPageProjectObjective) {
+      setPageProjectObjectives([]);
+      return;
+    }
+
+    const searchProjectObjectives = async () => {
+      if (!selectedPageProject) return;
+      setLoadingPageProjectObjectives(true);
+      try {
+        const response = await apiClient.get(`/salesforce/search-project-objectives?search=${encodeURIComponent(pageProjectObjectiveSearchTerm)}&project=${encodeURIComponent(selectedPageProject)}`);
+        if (response.data.success) {
+          setPageProjectObjectives(response.data.objectives || []);
+          setShowPageProjectObjectiveDropdown(true);
+        }
+      } catch (error) {
+        handleError(error, 'QuickSetupWizard - searchPageProjectObjectives');
+        setPageProjectObjectives([]);
+      } finally {
+        setLoadingPageProjectObjectives(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      searchProjectObjectives();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [pageProjectObjectiveSearchTerm, selectedPageProjectObjective, selectedPageProject]);
+
+  // Fetch qualification steps for Project Page section
+  const fetchPageQualificationSteps = async (projectObjectiveName) => {
+    if (!projectObjectiveName) return;
+    setLoadingPageQualificationSteps(true);
+    try {
+      const response = await apiClient.get(`/salesforce/qualification-steps?search=${encodeURIComponent(projectObjectiveName)}`);
+      if (response.data.success) {
+        setPageQualificationSteps(response.data.steps || []);
+      }
+    } catch (error) {
+      handleError(error, 'QuickSetupWizard - fetchPageQualificationSteps');
+    } finally {
+      setLoadingPageQualificationSteps(false);
+    }
+  };
+
+  // Search qualification steps for Project Page section - filter by selected project (like Create Project Page)
+  useEffect(() => {
+    if (!pageQualificationStepSearchTerm || pageQualificationStepSearchTerm.trim() === '' || pageQualificationStepSearchTerm === selectedPageQualificationStep) {
+      setPageQualificationSteps([]);
+      return;
+    }
+
+    // Get the selected project name for filtering
+    const selectedProjectName = selectedPageProject || pageProjectSearchTerm || watch('pageProject');
+    
+    // Don't search if no project is selected (qualification steps must be filtered by project)
+    if (!selectedProjectName || selectedProjectName.trim() === '') {
+      setPageQualificationSteps([]);
+      return;
+    }
+
+    const searchQualificationSteps = async () => {
+      setLoadingPageQualificationSteps(true);
+      try {
+        // Build query parameters - include search term and project filter
+        const params = new URLSearchParams();
+        params.append('search', pageQualificationStepSearchTerm);
+        // Re-check project name inside async function
+        const currentProjectName = selectedPageProject || pageProjectSearchTerm || watch('pageProject');
+        if (currentProjectName && currentProjectName.trim() !== '') {
+          params.append('project', currentProjectName);
+        }
+        
+        const response = await apiClient.get(`/salesforce/qualification-steps?${params.toString()}`);
+        if (response.data.success) {
+          const steps = response.data.qualificationSteps || response.data.steps || [];
+          setPageQualificationSteps(steps);
+          setShowPageQualificationStepDropdown(true);
+        }
+      } catch (error) {
+        handleError(error, 'QuickSetupWizard - searchPageQualificationSteps');
+        setPageQualificationSteps([]);
+      } finally {
+        setLoadingPageQualificationSteps(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      searchQualificationSteps();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [pageQualificationStepSearchTerm, selectedPageQualificationStep, selectedPageProject, pageProjectSearchTerm]);
+
+  // Search qualifications for Default Qualification Page (from Qualification_Step__c, NOT filtered by project)
+  useEffect(() => {
+    if (!pageProjectQualificationSearchTerm || pageProjectQualificationSearchTerm.trim() === '' || pageProjectQualificationSearchTerm === selectedPageProjectQualification) {
+      setPageProjectQualifications([]);
+      return;
+    }
+
+    const searchQualifications = async () => {
+      setLoadingPageProjectQualifications(true);
+      try {
+        // Build query parameters - only include search term, NO project filter
+        const params = new URLSearchParams();
+        params.append('search', pageProjectQualificationSearchTerm);
+        // Do NOT append project parameter - search all qualifications from Qualification_Step__c
+        
+        const response = await apiClient.get(`/salesforce/qualification-steps?${params.toString()}`);
+        if (response.data.success) {
+          const qualifications = response.data.qualificationSteps || [];
+          // Filter to only show Qualification_Step__c (not Project_Qualification_Step__c)
+          const filteredQualifications = qualifications.filter(q => q.objectType === 'Qualification_Step__c' || !q.objectType);
+          setPageProjectQualifications(filteredQualifications);
+          setShowPageProjectQualificationDropdown(true);
+        }
+      } catch (error) {
+        handleError(error, 'QuickSetupWizard - searchPageProjectQualifications');
+        setPageProjectQualifications([]);
+      } finally {
+        setLoadingPageProjectQualifications(false);
+      }
+    };
+
+    const timeoutId = setTimeout(() => {
+      searchQualifications();
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [pageProjectQualificationSearchTerm, selectedPageProjectQualification]);
+
+  // Handle project manager select
+  const handleProjectManagerSelect = (manager) => {
+    setProjectManagerSearchTerm(manager.name);
+    // Store both ID and name - ID for Salesforce, name for display/reference
+    setValue('projectManager', manager.id);
+    setValue('projectManagerName', manager.name || manager.email);
+    setShowProjectManagerDropdown(false);
+    setProjectManagerSearchResults([]);
+  };
+
+  // Handle project select for Project Objective section
+  const handleProjectSelect = (project) => {
+    setProjectSearchTerm(project.name);
+    setSelectedProject(project.name);
+    setValue('project', project.name);
+    setShowProjectDropdown(false);
+    setProjects([]);
+    fetchProjectObjectives(project.name);
+    
+    // Auto-fill Project in Qualification Step section
+    setValue('qualificationStepProject', project.name);
+    
+    // Auto-fill Project in Project Page section if not already set
+    if (!pageProjectSearchTerm || pageProjectSearchTerm === '') {
+      setPageProjectSearchTerm(project.name);
+      setSelectedPageProject(project.name);
+      setValue('pageProject', project.name);
+      fetchPageProjectObjectives(project.name);
+    }
+  };
+
+  // Handle project objective select for Qualification Step section
+  const handleProjectObjectiveSelect = (objective) => {
+    const objectiveName = objective.name || objective.contributorFacingProjectName;
+    setProjectObjectiveSearchTerm(objectiveName);
+    setSelectedProjectObjective(objectiveName);
+    setValue('projectObjective', objectiveName);
+    setShowProjectObjectiveDropdown(false);
+    setProjectObjectives([]);
+    fetchQualificationSteps(objectiveName);
+    
+    // Auto-fill Project Objective in Qualification Step section
+    setValue('qualificationStepProjectObjective', objectiveName);
+    
+    // Auto-fill Project Objective in Project Page section if not already set
+    if (!pageProjectObjectiveSearchTerm || pageProjectObjectiveSearchTerm === '') {
+      setPageProjectObjectiveSearchTerm(objectiveName);
+      setSelectedPageProjectObjective(objectiveName);
+      setValue('pageProjectObjective', objectiveName);
+      if (selectedPageProject) {
+        fetchPageQualificationSteps(objectiveName);
+      }
+    }
+  };
+
+  // Handle qualification step select
+  const handleQualificationStepSelect = (step) => {
+    setQualificationStepSearchTerm(step.name);
+    setSelectedQualificationStep(step.name);
+    setValue('qualificationStep', step.name);
+    setShowQualificationStepDropdown(false);
+    setQualificationSteps([]);
+  };
+
+  // Handle project select for Project Page section
+  const handlePageProjectSelect = (project) => {
+    setPageProjectSearchTerm(project.name);
+    setSelectedPageProject(project.name);
+    setValue('pageProject', project.name);
+    setShowPageProjectDropdown(false);
+    setPageProjects([]);
+    // Clear qualification step when project changes
+    setPageQualificationStepSearchTerm('');
+    setSelectedPageQualificationStep(null);
+    setPageQualificationSteps([]);
+    setValue('pageQualificationStep', '');
+    fetchPageProjectObjectives(project.name);
+  };
+
+  // Handle project objective select for Project Page section
+  const handlePageProjectObjectiveSelect = (objective) => {
+    setPageProjectObjectiveSearchTerm(objective.name || objective.contributorFacingProjectName);
+    setSelectedPageProjectObjective(objective.name || objective.contributorFacingProjectName);
+    setValue('pageProjectObjective', objective.name || objective.contributorFacingProjectName);
+    setShowPageProjectObjectiveDropdown(false);
+    setPageProjectObjectives([]);
+    fetchPageQualificationSteps(objective.name || objective.contributorFacingProjectName);
+  };
+
+  // Handle qualification step select for Project Page section
+  const handlePageQualificationStepSelect = (step) => {
+    setPageQualificationStepSearchTerm(step.name);
+    setSelectedPageQualificationStep(step.name);
+    setValue('pageQualificationStep', step.name);
+    setShowPageQualificationStepDropdown(false);
+    setPageQualificationSteps([]);
+  };
+
+  // Handle save
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const allFormData = watch();
+      const quickSetupData = {
+        // Project section
+        projectName: allFormData.projectName,
+        shortProjectName: allFormData.shortProjectName,
+        contributorProjectName: allFormData.contributorProjectName,
+        appenPartner: allFormData.appenPartner,
+        projectType: allFormData.projectType,
+        projectPriority: allFormData.projectPriority,
+        account: allFormData.account,
+        hireStartDate: allFormData.hireStartDate,
+        predictedCloseDate: allFormData.predictedCloseDate,
+        projectStatus: allFormData.projectStatus,
+        projectManager: allFormData.projectManager || projectManagerSearchTerm,
+        // Project Objective section
+        contributorFacingProjectName: allFormData.contributorFacingProjectName,
+        projectObjectiveName: allFormData.projectObjectiveName,
+        project: allFormData.project || projectSearchTerm,
+        workType: allFormData.workType,
+        daysBetweenReminderEmails: allFormData.daysBetweenReminderEmails,
+        // Qualification Step section
+        qualificationStep: allFormData.qualificationStep || qualificationStepSearchTerm,
+        funnel: allFormData.funnel,
+        stepNumber: allFormData.stepNumber,
+        numberOfAttempts: allFormData.numberOfAttempts,
+        // Project Page section
+        projectPageType: allFormData.projectPageType,
+        pageProject: allFormData.pageProject || pageProjectSearchTerm,
+        pageProjectObjective: allFormData.pageProjectObjective || pageProjectObjectiveSearchTerm,
+        pageQualificationStep: allFormData.pageQualificationStep || pageQualificationStepSearchTerm,
+        active: allFormData.active !== undefined ? allFormData.active : false,
+        // Project Team section
+        teamMembers: teamMembers,
+        savedAt: new Date().toISOString()
+      };
+
+      const success = await saveDraftQuickSetup(quickSetupData);
+      if (success) {
+        toast.success('Quick setup saved successfully!');
+      } else {
+        toast.error('Failed to save quick setup');
+      }
+    } catch (error) {
+      const errorMessage = handleError(error, 'QuickSetupWizard - saveDraftQuickSetup');
+      toast.error(errorMessage);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Handle cancel
+  const handleCancel = () => {
+    if (window.confirm('Are you sure you want to cancel? All unsaved changes will be lost.')) {
+      reset();
+      setProjectManagerSearchTerm('');
+      setProjectSearchTerm('');
+      setProjectObjectiveSearchTerm('');
+      setQualificationStepSearchTerm('');
+      setPageProjectSearchTerm('');
+      setPageProjectObjectiveSearchTerm('');
+      setPageQualificationStepSearchTerm('');
+      setSelectedProject(null);
+      setSelectedProjectObjective(null);
+      setSelectedQualificationStep(null);
+      setSelectedPageProject(null);
+      setSelectedPageProjectObjective(null);
+      setSelectedPageQualificationStep(null);
+      navigate('/dashboard');
+    }
+  };
+
+  // Handle publish
+  const handlePublish = async () => {
+    if (!hasPermission('create_project')) {
+      toast.error('You do not have permission to publish');
+      return;
+    }
+
+    // Check for added fields without values
+    const fieldsWithoutValues = [];
+    Array.from(addedFields).forEach(fieldKey => {
+      if (!fieldHasValue(fieldKey)) {
+        const field = availableFields.find(f => f.key === fieldKey);
+        if (field) {
+          fieldsWithoutValues.push(field.label);
+        }
+      }
+    });
+    
+    if (fieldsWithoutValues.length > 0) {
+      const warningMessage = `Warning: The following fields have been added but no values have been provided:\n${fieldsWithoutValues.join(', ')}\n\nDo you want to continue publishing without these values?`;
+      if (!window.confirm(warningMessage)) {
+        return;
+      }
+      toast.warning(`Publishing with ${fieldsWithoutValues.length} field(s) without values: ${fieldsWithoutValues.join(', ')}`);
+    }
+
+    setSubmitting(true);
+    try {
+      const allFormData = watch();
+      const results = {};
+      
+      // Include all added fields in the form data
+      Array.from(addedFields).forEach(fieldKey => {
+        const value = watch(fieldKey) || fieldValues[fieldKey];
+        if (value !== null && value !== undefined) {
+          allFormData[fieldKey] = value;
+        }
+      });
+
+      // Publish Project
+      if (allFormData.projectName && allFormData.shortProjectName && allFormData.contributorProjectName) {
+        try {
+          
+          const projectData = {
+            projectName: allFormData.projectName,
+            shortProjectName: allFormData.shortProjectName,
+            contributorProjectName: allFormData.contributorProjectName,
+            appenPartner: allFormData.appenPartner,
+            projectType: allFormData.projectType,
+            projectPriority: allFormData.projectPriority,
+            account: allFormData.account,
+            hireStartDate: allFormData.hireStartDate,
+            predictedCloseDate: allFormData.predictedCloseDate,
+            projectStatus: allFormData.projectStatus ? String(allFormData.projectStatus).trim() : null,
+            projectManager: allFormData.projectManager || allFormData.projectManagerName || projectManagerSearchTerm,
+            projectManagerName: allFormData.projectManagerName || projectManagerSearchTerm,
+            // Include all added fields
+            ...Object.fromEntries(
+              Array.from(addedFields)
+                .filter(fieldKey => {
+                  const value = allFormData[fieldKey];
+                  return value !== null && value !== undefined && value !== '';
+                })
+                .map(fieldKey => [fieldKey, allFormData[fieldKey]])
+            ),
+            // Include team members - filter out empty ones and ensure they have memberId
+            // CRITICAL: Only include valid team members with both name and ID
+            teamMembers: teamMembers
+              .filter(tm => 
+                tm && 
+                tm.member && tm.member.trim() !== '' && 
+                tm.memberId && tm.memberId.trim() !== '' &&
+                tm.role && tm.role !== '--None--'
+              )
+              .map(tm => ({
+                member: tm.member.trim(),
+                memberId: tm.memberId.trim(),
+                role: tm.role
+              }))
+          };
+          
+
+          // Sanitize data before sending to server
+          const sanitizedProjectData = sanitizeObject(projectData);
+          
+          const response = await apiClient.post('/salesforce/create-project', sanitizedProjectData, {
+            timeout: 300000
+          });
+
+          if (response.data.success) {
+            const projectId = response.data.salesforceId;
+            const projectName = response.data.objectName || allFormData.projectName || 'Project';
+            results.project = { success: true, salesforceId: projectId, objectName: projectName };
+            
+            // Check team member results
+            if (response.data.teamMembers && response.data.teamMembers.length > 0) {
+              const created = response.data.teamMembers.filter(tm => tm.status === 'created').length;
+              const errors = response.data.teamMembers.filter(tm => tm.status === 'error').length;
+              const skipped = response.data.teamMembers.filter(tm => tm.status === 'skipped').length;
+              
+              // Store team member results for consolidated popup
+              results.project.teamMembers = {
+                created,
+                errors,
+                skipped,
+                details: response.data.teamMembers
+              };
+            } else if (projectData.teamMembers && projectData.teamMembers.length > 0) {
+              // Team members were sent but no results returned - this is a problem
+              results.project.teamMembers = {
+                created: 0,
+                errors: projectData.teamMembers.length,
+                skipped: 0,
+                details: [],
+                warning: 'Team members were sent but no results were returned. Check server logs.'
+              };
+            }
+            
+            // CRITICAL: Update Project Status immediately after creation to ensure it's set correctly
+            // This is needed because Salesforce workflows/triggers might override the status
+            if (projectData.projectStatus && projectData.projectStatus.trim() !== '') {
+              try {
+                const updateResponse = await apiClient.patch(`/salesforce/update-project-status/${projectId}`, {
+                  projectStatus: projectData.projectStatus.trim()
+                }, {
+                  timeout: 30000
+                });
+                
+                if (updateResponse.data.success) {
+                  // Wait a moment for Salesforce to process the update
+                  await new Promise(resolve => setTimeout(resolve, 1000));
+                  
+                  if (updateResponse.data.warning) {
+                    results.project.statusWarning = `Status may have been overridden by Salesforce workflow`;
+                  }
+                } else {
+                  const errorMsg = getErrorMessage(updateResponse.data);
+                  results.project.statusError = errorMsg;
+                }
+              } catch (updateError) {
+                const errorMsg = handleError(updateError, 'QuickSetupWizard - updateProjectStatus');
+                results.project.statusError = errorMsg;
+              }
+            }
+          } else {
+            results.project = { success: false, error: response.data.error };
+          }
+        } catch (error) {
+          const errorMessage = handleError(error, 'QuickSetupWizard - publishProject');
+          results.project = { success: false, error: errorMessage };
+        }
+      }
+
+      // Publish Project Objective (only if project was published successfully)
+      if (results.project?.success && allFormData.contributorFacingProjectName && allFormData.project && allFormData.workType) {
+        // CRITICAL: Validate that at least one of country or language is selected BEFORE publishing
+        const country = allFormData.country || '';
+        const language = allFormData.language || '';
+        
+        if (!country.trim() && !language.trim()) {
+          toast.error('Either Country or Language must be selected before publishing Project Objective');
+          setError('country', { type: 'manual', message: 'Either Country or Language must be selected' });
+          setError('language', { type: 'manual', message: 'Either Country or Language must be selected' });
+          setFieldErrors(prev => ({
+            ...prev,
+            country: 'Either Country or Language must be selected',
+            language: 'Either Country or Language must be selected'
+          }));
+          setSubmitting(false);
+          return;
+        }
+
+        // Clear errors if validation passes
+        clearErrors(['country', 'language']);
+        setFieldErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors.country;
+          delete newErrors.language;
+          return newErrors;
+        });
+
+        try {
+          const objectiveData = {
+            contributorFacingProjectName: allFormData.contributorFacingProjectName,
+            projectObjectiveName: allFormData.projectObjectiveName,
+            project: allFormData.project || projectSearchTerm,
+            workType: allFormData.workType,
+            daysBetweenReminderEmails: allFormData.daysBetweenReminderEmails,
+            country: allFormData.country || '',
+            language: allFormData.language || ''
+          };
+
+          // Sanitize data before sending to server
+          const sanitizedObjectiveData = sanitizeObject(objectiveData);
+          
+          const response = await apiClient.post('/salesforce/create-project-objective', sanitizedObjectiveData, {
+            timeout: 300000
+          });
+
+          if (response.data.success) {
+            const objectiveName = response.data.objectName || allFormData.contributorFacingProjectName || allFormData.projectObjectiveName || 'Project Objective';
+            results.projectObjective = { success: true, salesforceId: response.data.salesforceId, objectName: objectiveName };
+          } else {
+            results.projectObjective = { success: false, error: response.data.error };
+          }
+        } catch (error) {
+          const errorMessage = handleError(error, 'QuickSetupWizard - publishProjectObjective');
+          results.projectObjective = { success: false, error: errorMessage };
+        }
+      }
+
+      // Publish Qualification Step (only if project objective was published successfully)
+      if (results.projectObjective?.success && allFormData.qualificationStep && allFormData.funnel && allFormData.stepNumber) {
+        try {
+          const stepData = {
+            project: allFormData.qualificationStepProject || allFormData.project || projectSearchTerm,
+            projectObjective: allFormData.qualificationStepProjectObjective || allFormData.contributorFacingProjectName || projectObjectiveSearchTerm,
+            qualificationStep: allFormData.qualificationStep || qualificationStepSearchTerm,
+            funnel: allFormData.funnel,
+            stepNumber: allFormData.stepNumber,
+            numberOfAttempts: allFormData.numberOfAttempts
+          };
+
+          // Sanitize data before sending to server
+          const sanitizedStepData = sanitizeObject(stepData);
+          
+          const response = await apiClient.post('/salesforce/create-qualification-step', sanitizedStepData, {
+            timeout: 300000
+          });
+
+          if (response.data.success) {
+            const stepName = response.data.objectName || allFormData.qualificationStep || 'Qualification Step';
+            results.qualificationStep = { success: true, salesforceId: response.data.salesforceId, objectName: stepName };
+          } else {
+            results.qualificationStep = { success: false, error: response.data.error };
+          }
+        } catch (error) {
+          const errorMessage = handleError(error, 'QuickSetupWizard - publishQualificationStep');
+          results.qualificationStep = { success: false, error: errorMessage };
+        }
+      }
+
+      // Publish Project Page (only if project was published successfully)
+      if (results.project?.success && allFormData.projectPageType && allFormData.pageProject && allFormData.pageProjectObjective) {
+        try {
+          const pageData = {
+            projectPageType: allFormData.projectPageType,
+            project: allFormData.pageProject || pageProjectSearchTerm,
+            projectObjective: allFormData.pageProjectObjective || pageProjectObjectiveSearchTerm,
+            projectQualificationStep: allFormData.pageQualificationStep || pageQualificationStepSearchTerm,
+            projectQualification: allFormData.pageProjectQualification || pageProjectQualificationSearchTerm,
+            active: allFormData.active !== undefined ? allFormData.active : false
+          };
+
+          // Sanitize data before sending to server
+          const sanitizedPageData = sanitizeObject(pageData);
+          
+          const response = await apiClient.post('/salesforce/create-project-page', sanitizedPageData, {
+            timeout: 300000
+          });
+
+          if (response.data.success) {
+            const pageName = response.data.objectName || allFormData.projectPageType || 'Project Page';
+            results.projectPage = { success: true, salesforceId: response.data.salesforceId, objectName: pageName };
+          } else {
+            let errorMessage = response.data.error || 'Failed to create Project Page';
+            
+            // Format duplicate record error message to be more user-friendly
+            if (errorMessage && typeof errorMessage === 'string') {
+              if (errorMessage.includes('duplicate record') || errorMessage.includes('duplicate')) {
+                // Extract the key information from the error message
+                const duplicateMatch = errorMessage.match(/Project, Project Objective, Page Type and Project Qualification Step must be unique/i);
+                if (duplicateMatch) {
+                  errorMessage = 'This Project Page already exists. The combination of Project, Project Objective, Page Type, and Project Qualification Step must be unique for an active page. Please change one or more of these fields and try again.';
+                } else {
+                  // General duplicate record message
+                  errorMessage = errorMessage.replace(/\n/g, ' ').trim();
+                }
+              } else {
+                // Remove newlines from other error messages
+                errorMessage = errorMessage.replace(/\n/g, ' ').trim();
+              }
+            }
+            
+            results.projectPage = { success: false, error: errorMessage };
+          }
+        } catch (error) {
+          let errorMessage = handleError(error, 'QuickSetupWizard - publishProjectPage');
+          
+          // Format duplicate record error message to be more user-friendly
+          if (errorMessage && typeof errorMessage === 'string') {
+            if (errorMessage.includes('duplicate record') || errorMessage.includes('duplicate')) {
+              // Extract the key information from the error message
+              const duplicateMatch = errorMessage.match(/Project, Project Objective, Page Type and Project Qualification Step must be unique/i);
+              if (duplicateMatch) {
+                errorMessage = 'This Project Page already exists. The combination of Project, Project Objective, Page Type, and Project Qualification Step must be unique for an active page. Please change one or more of these fields and try again.';
+              } else {
+                // General duplicate record message
+                errorMessage = errorMessage.replace(/\n/g, ' ').trim();
+              }
+            } else {
+              // Remove newlines from other error messages
+              errorMessage = errorMessage.replace(/\n/g, ' ').trim();
+            }
+          }
+          
+          results.projectPage = { success: false, error: errorMessage };
+        }
+      }
+
+      // Consolidate all results into a single popup
+      const publishedObjects = [];
+      const failedObjects = [];
+      
+      // Collect published objects
+      if (results.project?.success) {
+        publishedObjects.push({
+          type: 'Project',
+          name: results.project.objectName || 'Project',
+          id: results.project.salesforceId,
+          teamMembers: results.project.teamMembers,
+          statusWarning: results.project.statusWarning,
+          statusError: results.project.statusError
+        });
+      } else if (results.project?.error) {
+        failedObjects.push({
+          type: 'Project',
+          name: allFormData.projectName || 'Project',
+          error: results.project.error
+        });
+      }
+      
+      if (results.projectObjective?.success) {
+        publishedObjects.push({
+          type: 'Project Objective',
+          name: results.projectObjective.objectName || 'Project Objective',
+          id: results.projectObjective.salesforceId
+        });
+      } else if (results.projectObjective?.error) {
+        failedObjects.push({
+          type: 'Project Objective',
+          name: allFormData.contributorFacingProjectName || allFormData.projectObjectiveName || 'Project Objective',
+          error: results.projectObjective.error
+        });
+      }
+      
+      if (results.qualificationStep?.success) {
+        publishedObjects.push({
+          type: 'Qualification Step',
+          name: results.qualificationStep.objectName || 'Qualification Step',
+          id: results.qualificationStep.salesforceId
+        });
+      } else if (results.qualificationStep?.error) {
+        failedObjects.push({
+          type: 'Qualification Step',
+          name: allFormData.qualificationStep || 'Qualification Step',
+          error: results.qualificationStep.error
+        });
+      }
+      
+      if (results.projectPage?.success) {
+        publishedObjects.push({
+          type: 'Project Page',
+          name: results.projectPage.objectName || 'Project Page',
+          id: results.projectPage.salesforceId
+        });
+      } else if (results.projectPage?.error) {
+        failedObjects.push({
+          type: 'Project Page',
+          name: allFormData.projectPageType || 'Project Page',
+          error: results.projectPage.error
+        });
+      }
+      
+      // Show consolidated popup modal
+      if (publishedObjects.length > 0 || failedObjects.length > 0) {
+        setPublishResults({
+          published: publishedObjects,
+          failed: failedObjects
+        });
+        setShowPublishResultsModal(true);
+        
+        // If all sections published successfully, delete draft (navigation handled by modal)
+        const allSuccess = Object.values(results).every(r => r?.success);
+        if (allSuccess) {
+          await deleteDraftQuickSetup();
+        }
+      }
+    } catch (error) {
+      const errorMessage = handleError(error, 'QuickSetupWizard - publishQuickSetup');
+      toast.error(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <div className="project-setup" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease' }}>
+        <div className="setup-container">
+          <div className="setup-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button 
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                  aria-label="Toggle sidebar"
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">Quick Setup Wizard</h1>
+                  <p className="page-subtitle">Create project, objective, qualification step, and project page in one go</p>
+                </div>
+              </div>
+              <div className="header-user-profile">
+                <div className="user-profile">
+                  <div className="user-avatar">
+                    {(user?.email || 'U').charAt(0).toUpperCase()}
+                  </div>
+                  <span className="user-name">{user?.email || 'User'}</span>
+                  <button className="logout-btn" onClick={logout} title="Logout">
+                    <LogOut size={18} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+            <form onSubmit={handleSubmit(handlePublish)}>
+              {/* Project Section */}
+              <CreateProjectSection
+                register={register}
+                errors={errors}
+                fieldErrors={fieldErrors}
+                watch={watch}
+                setValue={setValue}
+                showAddFieldDropdown={showAddFieldDropdown}
+                setShowAddFieldDropdown={setShowAddFieldDropdown}
+                addFieldDropdownRef={addFieldDropdownRef}
+                availableFields={availableFields}
+                loadingFields={loadingFields}
+                fieldSearchTerm={fieldSearchTerm}
+                setFieldSearchTerm={setFieldSearchTerm}
+                selectedSection={selectedSection}
+                setSelectedSection={setSelectedSection}
+                sections={sections}
+                filteredFields={filteredFields}
+                totalFilteredCount={totalFilteredCount}
+                debouncedSearchTerm={debouncedSearchTerm}
+                handleAddField={handleAddField}
+                loadingAccounts={loadingAccounts}
+                accountSearchTerm={accountSearchTerm}
+                setAccountSearchTerm={setAccountSearchTerm}
+                accountSearchResults={accountSearchResults}
+                showAccountDropdown={showAccountDropdown}
+                setShowAccountDropdown={setShowAccountDropdown}
+                handleAccountSelect={handleAccountSelect}
+                selectedAccount={selectedAccount}
+                projectManagerSearchTerm={projectManagerSearchTerm}
+                setProjectManagerSearchTerm={setProjectManagerSearchTerm}
+                projectManagerSearchResults={projectManagerSearchResults}
+                setProjectManagerSearchResults={setProjectManagerSearchResults}
+                showProjectManagerDropdown={showProjectManagerDropdown}
+                setShowProjectManagerDropdown={setShowProjectManagerDropdown}
+                loadingProjectManagerSearch={loadingProjectManagerSearch}
+                handleProjectManagerSelect={handleProjectManagerSelect}
+                projectManagerSearchTimeoutRef={projectManagerSearchTimeoutRef}
+                projectManagerSearchCacheRef={projectManagerSearchCacheRef}
+                searchProjectManager={searchProjectManager}
+              />
+
+              {/* Project Objective Section */}
+              <CreateProjectObjectiveSection
+                register={register}
+                errors={errors}
+                fieldErrors={fieldErrors}
+                watch={watch}
+                projectSearchTerm={projectSearchTerm}
+                selectedProject={selectedProject}
+                projects={projects}
+                loadingProjects={loadingProjects}
+                showProjectDropdown={showProjectDropdown}
+                handleProjectSelect={handleProjectSelect}
+              />
+
+              {/* Qualification Step Section */}
+              <CreateQualificationStepSection
+                register={register}
+                errors={errors}
+                fieldErrors={fieldErrors}
+                watch={watch}
+                qualificationStepSearchTerm={qualificationStepSearchTerm}
+                setQualificationStepSearchTerm={setQualificationStepSearchTerm}
+                setValue={setValue}
+                qualificationSteps={qualificationSteps}
+                loadingQualificationSteps={loadingQualificationSteps}
+                showQualificationStepDropdown={showQualificationStepDropdown}
+                setShowQualificationStepDropdown={setShowQualificationStepDropdown}
+                handleQualificationStepSelect={handleQualificationStepSelect}
+                projectSearchTerm={projectSearchTerm}
+                selectedProject={selectedProject}
+              />
+              {/* Qualification Step Section - OLD CODE REMOVED */}
+              {/* <div className="section-content" style={{ marginBottom: '24px' }}>
+                <h2 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>
+                  <Sparkles size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                  Create Project Qualification step
+                </h2>
+                <div className="form-grid compact-grid">
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>
+                      * Project
+                    </label>
+                    <input
+                      type="text"
+                      {...register('qualificationStepProject', { required: true })}
+                      value={watch('projectName') || watch('qualificationStepProject') || projectSearchTerm || selectedProject || ''}
+                      readOnly
+                      className={fieldErrors.qualificationStepProject ? 'error-field' : ''}
+                      style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+                    />
+                    {errors.qualificationStepProject && <span className="error">Required</span>}
+                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Auto-filled from Create Project section</p>
+                  </div>
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>
+                      * Project Objective
+                    </label>
+                    <input
+                      type="text"
+                      {...register('qualificationStepProjectObjective', { required: true })}
+                      value={watch('projectObjectiveName') || watch('contributorFacingProjectName') || selectedProjectObjective || ''}
+                      readOnly
+                      className={fieldErrors.qualificationStepProjectObjective ? 'error-field' : ''}
+                      style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+                    />
+                    {errors.qualificationStepProjectObjective && <span className="error">Required</span>}
+                    <p style={{ fontSize: '11px', color: '#666', marginTop: '4px' }}>Auto-filled from Create Project Objective section</p>
+                  </div>
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>
+                      * Qualification Step
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        {...register('qualificationStep', { required: true })}
+                        value={qualificationStepSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setQualificationStepSearchTerm(newValue);
+                          setValue('qualificationStep', newValue);
+                          setShowQualificationStepDropdown(true);
+                        }}
+                        onFocus={() => {
+                          if (qualificationStepSearchTerm && qualificationSteps.length > 0) {
+                            setShowQualificationStepDropdown(true);
+                          }
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setShowQualificationStepDropdown(false), 200);
+                        }}
+                        className={fieldErrors.qualificationStep ? 'error-field' : ''}
+                        placeholder="Search qualification steps from Salesforce..."
+                        style={{ paddingRight: '36px', fontSize: '12px', padding: '6px 10px', height: '32px', width: '100%' }}
+                      />
+                      <Search size={16} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                      {(showQualificationStepDropdown && (qualificationSteps.length > 0 || loadingQualificationSteps)) && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          backgroundColor: '#ffffff',
+                          color: '#000000',
+                          border: '1px solid #e5e7eb',
+                          borderRadius: '4px',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          zIndex: 1000,
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                          marginTop: '4px'
+                        }}>
+                          {loadingQualificationSteps ? (
+                            <div style={{ padding: '6px', fontSize: '12px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>Searching...</div>
+                          ) : qualificationSteps.length > 0 ? (
+                            qualificationSteps.map(step => (
+                              <div
+                                key={step.id}
+                                onClick={() => handleQualificationStepSelect(step)}
+                                style={{
+                                  padding: '6px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  borderBottom: '1px solid #f0f0f0',
+                                  color: '#000000',
+                                  backgroundColor: '#ffffff'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#f5f5f5';
+                                  e.currentTarget.style.color = '#000000';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.backgroundColor = '#ffffff';
+                                  e.currentTarget.style.color = '#000000';
+                                }}
+                              >
+                                {step.name}
+                              </div>
+                            ))
+                          ) : (
+                            <div style={{ padding: '6px', fontSize: '12px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>No results found</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {errors.qualificationStep && <span className="error">Required</span>}
+                  </div>
+                  <div className="form-group">
+                    <label>
+                      * Funnel
+                    </label>
+                    <select {...register('funnel', { required: true })} className={fieldErrors.funnel ? 'error-field' : ''}>
+                      <option value="">--None--</option>
+                      <option value="A">A</option>
+                      <option value="B">B</option>
+                      <option value="C">C</option>
+                      <option value="D">D</option>
+                      <option value="E">E</option>
+                    </select>
+                    {errors.funnel && <span className="error">Required</span>}
+                  </div>
+                  <div className="form-group">
+                    <label>
+                      * Step Number
+                    </label>
+                    <input type="number" {...register('stepNumber', { required: true, valueAsNumber: true })} className={fieldErrors.stepNumber ? 'error-field' : ''} />
+                    {errors.stepNumber && <span className="error">Required</span>}
+                  </div>
+                  <div className="form-group">
+                    <label>
+                      * Number of Attempts
+                    </label>
+                    <input type="number" {...register('numberOfAttempts', { required: true, valueAsNumber: true })} className={fieldErrors.numberOfAttempts ? 'error-field' : ''} />
+                    {errors.numberOfAttempts && <span className="error">Required</span>}
+                  </div>
+                </div>
+              </div>
+              */}
+
+              {/* Project Team Section */}
+              <div className="section-content" style={{ marginBottom: '24px' }}>
+                <h2 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>
+                  <Sparkles size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                  Project Team
+                </h2>
+                <ProjectTeamSection 
+                  teamMembers={teamMembers}
+                  setTeamMembers={setTeamMembers}
+                  teamMemberSearchResults={teamMemberSearchResults}
+                  setTeamMemberSearchResults={setTeamMemberSearchResults}
+                  loadingTeamMemberSearch={loadingTeamMemberSearch}
+                  setLoadingTeamMemberSearch={setLoadingTeamMemberSearch}
+                  fieldErrors={fieldErrors}
+                  setFieldErrors={setFieldErrors}
+                  teamMemberSearchTimeoutRefs={teamMemberSearchTimeoutRefs}
+                />
+              </div>
+
+              {/* Project Page Section */}
+              <CreateProjectPageSection
+                register={register}
+                errors={errors}
+                fieldErrors={fieldErrors}
+                watch={watch}
+                setValue={setValue}
+                pageProjectSearchTerm={pageProjectSearchTerm}
+                setPageProjectSearchTerm={setPageProjectSearchTerm}
+                selectedPageProject={selectedPageProject}
+                setSelectedPageProject={setSelectedPageProject}
+                pageProjects={pageProjects}
+                loadingPageProjects={loadingPageProjects}
+                showPageProjectDropdown={showPageProjectDropdown}
+                setShowPageProjectDropdown={setShowPageProjectDropdown}
+                handlePageProjectSelect={handlePageProjectSelect}
+                loadingPageProjectObjectives={loadingPageProjectObjectives}
+                pageProjectObjectives={pageProjectObjectives}
+                pageProjectObjectiveSearchTerm={pageProjectObjectiveSearchTerm}
+                setPageProjectObjectiveSearchTerm={setPageProjectObjectiveSearchTerm}
+                selectedPageProjectObjective={selectedPageProjectObjective}
+                setSelectedPageProjectObjective={setSelectedPageProjectObjective}
+                showPageProjectObjectiveDropdown={showPageProjectObjectiveDropdown}
+                setShowPageProjectObjectiveDropdown={setShowPageProjectObjectiveDropdown}
+                handlePageProjectObjectiveSelect={handlePageProjectObjectiveSelect}
+                pageQualificationStepSearchTerm={pageQualificationStepSearchTerm}
+                setPageQualificationStepSearchTerm={setPageQualificationStepSearchTerm}
+                selectedPageQualificationStep={selectedPageQualificationStep}
+                setSelectedPageQualificationStep={setSelectedPageQualificationStep}
+                pageQualificationSteps={pageQualificationSteps}
+                loadingPageQualificationSteps={loadingPageQualificationSteps}
+                showPageQualificationStepDropdown={showPageQualificationStepDropdown}
+                setShowPageQualificationStepDropdown={setShowPageQualificationStepDropdown}
+                handlePageQualificationStepSelect={handlePageQualificationStepSelect}
+                pageProjectQualificationSearchTerm={pageProjectQualificationSearchTerm}
+                setPageProjectQualificationSearchTerm={setPageProjectQualificationSearchTerm}
+                selectedPageProjectQualification={selectedPageProjectQualification}
+                setSelectedPageProjectQualification={setSelectedPageProjectQualification}
+                pageProjectQualifications={pageProjectQualifications}
+                loadingPageProjectQualifications={loadingPageProjectQualifications}
+                showPageProjectQualificationDropdown={showPageProjectQualificationDropdown}
+                setShowPageProjectQualificationDropdown={setShowPageProjectQualificationDropdown}
+              />
+              {/* Project Page Section - OLD CODE REMOVED */}
+              {/* <div className="section-content" style={{ marginBottom: '24px' }}>
+                <h2 style={{ marginBottom: '12px', color: '#1e293b', fontSize: '16px', fontWeight: '600' }}>
+                  <Sparkles size={20} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                  Create Project Page
+                </h2>
+                <div className="form-grid compact-grid">
+                  <div className="form-group">
+                    <label>
+                      * Project Page Type
+                    </label>
+                    <select {...register('projectPageType', { required: true })} className={fieldErrors.projectPageType ? 'error-field' : ''}>
+                      <option value="">--None--</option>
+                      <option value="Project Splash Page (Preapply)">Project Splash Page (Preapply)</option>
+                      <option value="Project Pre-Qualification">Project Pre-Qualification</option>
+                      <option value="Project Qualifying Page">Project Qualifying Page</option>
+                      <option value="Project Active Page">Project Active Page</option>
+                      <option value="Default Qualification Page">Default Qualification Page</option>
+                    </select>
+                    {errors.projectPageType && <span className="error">Required</span>}
+                  </div>
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>
+                      * Project
+                      <Info size={14} className="info-icon" />
+                    </label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        {...register('pageProject', { required: true })}
+                        className={fieldErrors.pageProject ? 'error-field' : ''}
+                        placeholder="Search or enter project name..."
+                        style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', height: '32px', width: '100%' }}
+                        value={pageProjectSearchTerm}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          setPageProjectSearchTerm(newValue);
+                          setValue('pageProject', newValue);
+                          // If the value matches the selected project, don't show dropdown
+                          if (selectedPageProject && newValue === selectedPageProject) {
+                            setShowPageProjectDropdown(false);
+                            setPageProjects([]);
+                          } else if (newValue.trim() !== '') {
+                            // Only show dropdown if there's a search term and it doesn't match selected project
+                            setShowPageProjectDropdown(true);
+                          } else {
+                            setShowPageProjectDropdown(false);
+                            setPageProjects([]);
+                          }
+                          // Clear qualification step when project changes
+                          if (newValue !== selectedPageProject) {
+                            setPageQualificationStepSearchTerm('');
+                            setSelectedPageQualificationStep(null);
+                            setPageQualificationSteps([]);
+                            setValue('pageQualificationStep', '');
+                          }
+                        }}
+                        onFocus={() => {
+                          // Only show dropdown if there's a search term, results exist, and it doesn't match selected project
+                          const searchTerm = pageProjectSearchTerm;
+                          const selectedProject = selectedPageProject;
+                          if (searchTerm && searchTerm !== selectedProject && pageProjects.length > 0) {
+                            setShowPageProjectDropdown(true);
+                          }
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setShowPageProjectDropdown(false), 200);
+                        }}
+                      />
+                      <Search size={16} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                      {showPageProjectDropdown && pageProjects.length > 0 && (
+                        <div style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          right: 0,
+                          backgroundColor: '#ffffff',
+                          color: '#000000',
+                          border: '1px solid #ddd',
+                          borderRadius: '4px',
+                          maxHeight: '200px',
+                          overflowY: 'auto',
+                          zIndex: 1000,
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                          marginTop: '4px'
+                        }}>
+                          {loadingPageProjects ? (
+                            <div style={{ padding: '6px', fontSize: '12px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>Searching...</div>
+                          ) : (
+                            pageProjects.map(project => (
+                              <div
+                                key={project.id}
+                                onClick={() => handlePageProjectSelect(project)}
+                                style={{
+                                  padding: '6px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  borderBottom: '1px solid #f0f0f0',
+                                  backgroundColor: '#ffffff',
+                                  color: '#000000'
+                                }}
+                                onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                                onMouseLeave={(e) => e.target.style.backgroundColor = '#ffffff'}
+                              >
+                                {project.name} {project.status && `(${project.status})`}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {errors.pageProject && <span className="error">Required</span>}
+                  </div>
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>
+                      * Project Objective
+                    </label>
+                    {loadingPageProjectObjectives ? (
+                      <div style={{ padding: '6px', fontSize: '12px', color: '#666' }}>Loading project objectives...</div>
+                    ) : pageProjectObjectives.length > 0 ? (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          {...register('pageProjectObjective', { required: true })} 
+                          className={fieldErrors.pageProjectObjective ? 'error-field' : ''} 
+                          placeholder="Search or enter project objective name..."
+                          style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', height: '32px', width: '100%' }}
+                          value={pageProjectObjectiveSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setPageProjectObjectiveSearchTerm(newValue);
+                            setValue('pageProjectObjective', newValue);
+                            // Clear selected objective if user is typing something different
+                            const selectedObjective = selectedPageProjectObjective;
+                            if (selectedObjective && newValue !== selectedObjective) {
+                              setSelectedPageProjectObjective(null);
+                            }
+                            // Only show dropdown if the value doesn't match selected objective
+                            if (!selectedObjective || newValue !== selectedObjective) {
+                              setShowPageProjectObjectiveDropdown(true);
+                            } else {
+                              setShowPageProjectObjectiveDropdown(false);
+                              setPageProjectObjectives([]);
+                            }
+                          }}
+                          onFocus={() => {
+                            const selectedObjective = selectedPageProjectObjective;
+                            const searchTerm = pageProjectObjectiveSearchTerm;
+                            // Only show dropdown if there's a search term, results exist, and it doesn't match selected objective
+                            if (searchTerm && (!selectedObjective || searchTerm !== selectedObjective) && pageProjectObjectives.length > 0) {
+                              setShowPageProjectObjectiveDropdown(true);
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setShowPageProjectObjectiveDropdown(false), 200);
+                          }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                        {showPageProjectObjectiveDropdown && pageProjectObjectives.length > 0 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            marginTop: '4px'
+                          }}>
+                            {pageProjectObjectives.map(objective => (
+                              <div
+                                key={objective.id}
+                                onClick={() => handlePageProjectObjectiveSelect(objective)}
+                                style={{
+                                  padding: '6px 10px',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  borderBottom: '1px solid #f0f0f0',
+                                  backgroundColor: '#ffffff',
+                                  color: '#000000'
+                                }}
+                                onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                                onMouseLeave={(e) => e.target.style.backgroundColor = '#ffffff'}
+                              >
+                                {objective.contributorFacingProjectName || objective.name}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : selectedPageProject ? (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          {...register('pageProjectObjective', { required: true })} 
+                          placeholder="No project objectives found. Enter manually..."
+                          style={{ paddingRight: '36px', fontSize: '12px', padding: '6px 10px', height: '32px' }}
+                          value={pageProjectObjectiveSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setPageProjectObjectiveSearchTerm(newValue);
+                            setValue('pageProjectObjective', newValue);
+                          }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                      </div>
+                    ) : (
+                      <div style={{ position: 'relative' }}>
+                        <input 
+                          type="text" 
+                          {...register('pageProjectObjective', { required: true })} 
+                          placeholder="Select a project first..."
+                          disabled
+                          style={{ paddingRight: '36px', fontSize: '12px', padding: '6px 10px', height: '32px', opacity: 0.5 }}
+                          value={pageProjectObjectiveSearchTerm}
+                        />
+                        <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666' }} />
+                      </div>
+                    )}
+                    {errors.pageProjectObjective && <span className="error">Required</span>}
+                  </div>
+                  {watch('projectPageType') === 'Project Qualifying Page' && (
+                    <div className="form-group" style={{ position: 'relative' }}>
+                      <label>
+                        * Project Qualification Step
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="text"
+                          {...register('pageQualificationStep', {
+                            validate: (value) => {
+                              const pageType = watch('projectPageType');
+                              if (pageType === 'Project Qualifying Page' && (!value || value.trim() === '')) {
+                                return 'Project Qualification Step is required when Project Page Type is "Project Qualifying Page"';
+                              }
+                              return true;
+                            }
+                          })}
+                          className={fieldErrors.pageQualificationStep ? 'error-field' : ''}
+                          placeholder="Search or enter qualification step name..."
+                          style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', height: '32px', width: '100%' }}
+                          value={pageQualificationStepSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setPageQualificationStepSearchTerm(newValue);
+                            setValue('pageQualificationStep', newValue);
+                            // Clear selected step if user is typing something different
+                            const selectedStep = selectedPageQualificationStep;
+                            if (selectedStep && newValue !== selectedStep) {
+                              setSelectedPageQualificationStep(null);
+                            }
+                            // Only show dropdown if the value doesn't match selected step
+                            if (!selectedStep || newValue !== selectedStep) {
+                              setShowPageQualificationStepDropdown(true);
+                            } else {
+                              setShowPageQualificationStepDropdown(false);
+                              setPageQualificationSteps([]);
+                            }
+                          }}
+                          onFocus={() => {
+                            const selectedStep = selectedPageQualificationStep;
+                            const searchTerm = pageQualificationStepSearchTerm;
+                            // Only show dropdown if there's a search term, results exist, and it doesn't match selected step
+                            if (searchTerm && (!selectedStep || searchTerm !== selectedStep) && pageQualificationSteps.length > 0) {
+                              setShowPageQualificationStepDropdown(true);
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setShowPageQualificationStepDropdown(false), 200);
+                          }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                        {showPageQualificationStepDropdown && (pageQualificationSteps.length > 0 || loadingPageQualificationSteps) && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            marginTop: '4px'
+                          }}>
+                            {loadingPageQualificationSteps ? (
+                              <div style={{ padding: '6px', fontSize: '12px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>Searching...</div>
+                            ) : pageQualificationSteps.length > 0 ? (
+                              pageQualificationSteps.map(step => (
+                                <div
+                                  key={step.id}
+                                  onClick={() => handlePageQualificationStepSelect(step)}
+                                  style={{
+                                    padding: '6px 10px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    borderBottom: '1px solid #f0f0f0',
+                                    backgroundColor: '#ffffff',
+                                    color: '#000000'
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                                  onMouseLeave={(e) => e.target.style.backgroundColor = '#ffffff'}
+                                >
+                                  {step.name}
+                                </div>
+                              ))
+                            ) : (
+                              <div style={{ padding: '6px', fontSize: '12px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>No results found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {errors.pageQualificationStep && <span className="error">Required</span>}
+                    </div>
+                  )}
+                  {watch('projectPageType') === 'Default Qualification Page' && (
+                    <div className="form-group" style={{ position: 'relative' }}>
+                      <label>
+                        * Qualification
+                      </label>
+                      <div style={{ position: 'relative' }}>
+                        <input
+                          type="text"
+                          {...register('pageProjectQualification', {
+                            validate: (value) => {
+                              const pageType = watch('projectPageType');
+                              if (pageType === 'Default Qualification Page' && (!value || value.trim() === '')) {
+                                return 'Qualification is required when Project Page Type is "Default Qualification Page"';
+                              }
+                              return true;
+                            }
+                          })}
+                          className={fieldErrors.pageProjectQualification ? 'error-field' : ''}
+                          placeholder="Search or enter qualification name..."
+                          style={{ fontSize: '12px', padding: '6px 10px', paddingRight: '36px', height: '32px', width: '100%' }}
+                          value={pageProjectQualificationSearchTerm}
+                          onChange={(e) => {
+                            const newValue = e.target.value;
+                            setPageProjectQualificationSearchTerm(newValue);
+                            setValue('pageProjectQualification', newValue);
+                            // Clear selected qualification if user is typing something different
+                            const selectedQualification = selectedPageProjectQualification;
+                            if (selectedQualification && newValue !== selectedQualification) {
+                              setSelectedPageProjectQualification(null);
+                            }
+                            // Only show dropdown if the value doesn't match selected qualification
+                            if (!selectedQualification || newValue !== selectedQualification) {
+                              setShowPageProjectQualificationDropdown(true);
+                            } else {
+                              setShowPageProjectQualificationDropdown(false);
+                              setPageProjectQualifications([]);
+                            }
+                          }}
+                          onFocus={() => {
+                            const selectedQualification = selectedPageProjectQualification;
+                            const searchTerm = pageProjectQualificationSearchTerm;
+                            // Only show dropdown if there's a search term, results exist, and it doesn't match selected qualification
+                            if (searchTerm && (!selectedQualification || searchTerm !== selectedQualification) && pageProjectQualifications.length > 0) {
+                              setShowPageProjectQualificationDropdown(true);
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setShowPageProjectQualificationDropdown(false), 200);
+                          }}
+                        />
+                        <Search size={14} style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: '#666', pointerEvents: 'none' }} />
+                        {showPageProjectQualificationDropdown && (pageProjectQualifications.length > 0 || loadingPageProjectQualifications) && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            right: 0,
+                            backgroundColor: '#ffffff',
+                            color: '#000000',
+                            border: '1px solid #ddd',
+                            borderRadius: '4px',
+                            maxHeight: '200px',
+                            overflowY: 'auto',
+                            zIndex: 1000,
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            marginTop: '4px'
+                          }}>
+                            {loadingPageProjectQualifications ? (
+                              <div style={{ padding: '6px', fontSize: '12px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>Searching...</div>
+                            ) : pageProjectQualifications.length > 0 ? (
+                              pageProjectQualifications.map(qualification => (
+                                <div
+                                  key={qualification.id}
+                                  onClick={() => {
+                                    setValue('pageProjectQualification', qualification.name);
+                                    setPageProjectQualificationSearchTerm(qualification.name);
+                                    setSelectedPageProjectQualification(qualification.name);
+                                    setShowPageProjectQualificationDropdown(false);
+                                    setPageProjectQualifications([]);
+                                  }}
+                                  style={{
+                                    padding: '6px 10px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    borderBottom: '1px solid #f0f0f0',
+                                    backgroundColor: '#ffffff',
+                                    color: '#000000'
+                                  }}
+                                  onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                                  onMouseLeave={(e) => e.target.style.backgroundColor = '#ffffff'}
+                                >
+                                  {qualification.name}
+                                </div>
+                              ))
+                            ) : (
+                              <div style={{ padding: '6px', fontSize: '12px', color: '#000000', textAlign: 'center', backgroundColor: '#ffffff' }}>No results found</div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {errors.pageProjectQualification && <span className="error">Required</span>}
+                    </div>
+                  )}
+                  <div className="form-group">
+                    <label>
+                      <input type="checkbox" {...register('active')} defaultChecked />
+                      <span>Active</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+              */}
+
+              {/* Dynamically Added Fields Section */}
+              <DynamicFieldsSection
+                addedFields={addedFields}
+                availableFields={availableFields}
+                register={register}
+                errors={errors}
+                fieldErrors={fieldErrors}
+                watch={watch}
+                setValue={setValue}
+                fieldValues={fieldValues}
+                setFieldValues={setFieldValues}
+                handleRemoveField={handleRemoveField}
+                fieldHasValue={fieldHasValue}
+              />
+              
+              {/* Action Buttons */}
+              <div className="setup-actions" style={{ marginTop: '24px', paddingTop: '12px', borderTop: '1px solid #e5e7eb', display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  onClick={handleCancel}
+                  className="btn-secondary"
+                  disabled={submitting || saving}
+                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSave}
+                  className="btn-secondary"
+                  disabled={submitting || saving}
+                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+                <button
+                  type="submit"
+                  className="btn-primary"
+                  disabled={submitting || saving}
+                  style={{ padding: '6px 12px', fontSize: '12px' }}
+                >
+                  {submitting ? 'Publishing...' : 'Publish'}
+                </button>
+              </div>
+            </form>
+        </div>
+      </div>
+
+      {/* Publish Results Modal */}
+      {showPublishResultsModal && publishResults && (
+        <div 
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px',
+            boxSizing: 'border-box'
+          }}
+          onClick={() => setShowPublishResultsModal(false)}
+        >
+          <div 
+            style={{
+              backgroundColor: '#ffffff',
+              borderRadius: '8px',
+              width: '90%',
+              maxWidth: '700px',
+              maxHeight: '90vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
+              boxSizing: 'border-box',
+              color: '#002329',
+              fontFamily: 'Poppins',
+              fontSize: '14px'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 24px',
+              borderBottom: '1px solid #e2e8f0',
+              flexShrink: 0
+            }}>
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}>
+                {publishResults.failed.length > 0 ? (
+                  <XCircle size={24} color="#ef4444" />
+                ) : (
+                  <CheckCircle size={24} color="#10b981" />
+                )}
+                <h2 style={{
+                  margin: 0,
+                  fontSize: '18px',
+                  fontWeight: 600,
+                  color: '#002329',
+                  fontFamily: 'Poppins'
+                }}>
+                  Publish Results
+                </h2>
+              </div>
+              <button
+                onClick={() => setShowPublishResultsModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#f1f5f9'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = 'transparent'}
+              >
+                <X size={20} color="#64748b" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div style={{
+              padding: '24px',
+              overflowY: 'auto',
+              flex: 1
+            }}>
+              {/* Published Objects */}
+              {publishResults.published.length > 0 && (
+                <div style={{ marginBottom: '24px' }}>
+                  <h3 style={{
+                    margin: '0 0 16px 0',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#10b981',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <CheckCircle size={18} />
+                    Published Successfully ({publishResults.published.length})
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    {publishResults.published.map((obj, index) => (
+                      <div key={index} style={{
+                        padding: '16px',
+                        backgroundColor: '#f0fdf4',
+                        border: '1px solid #bbf7d0',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          fontWeight: 600,
+                          color: '#002329',
+                          marginBottom: '8px'
+                        }}>
+                          {obj.type}: "{obj.name}"
+                        </div>
+                        {obj.teamMembers && (
+                          <div style={{
+                            marginTop: '8px',
+                            fontSize: '13px',
+                            color: '#64748b'
+                          }}>
+                            {obj.teamMembers.created > 0 && (
+                              <div style={{ marginBottom: '4px' }}>
+                                ✓ {obj.teamMembers.created} team member(s) created
+                              </div>
+                            )}
+                            {obj.teamMembers.errors > 0 && (
+                              <div style={{ marginBottom: '4px', color: '#ef4444' }}>
+                                ✗ {obj.teamMembers.errors} team member(s) failed
+                              </div>
+                            )}
+                            {obj.teamMembers.skipped > 0 && (
+                              <div style={{ marginBottom: '4px', color: '#f59e0b' }}>
+                                ⚠ {obj.teamMembers.skipped} team member(s) skipped
+                              </div>
+                            )}
+                            {obj.teamMembers.warning && (
+                              <div style={{ marginBottom: '4px', color: '#f59e0b' }}>
+                                ⚠ {obj.teamMembers.warning}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {obj.statusWarning && (
+                          <div style={{
+                            marginTop: '8px',
+                            fontSize: '13px',
+                            color: '#f59e0b'
+                          }}>
+                            ⚠️ {obj.statusWarning}
+                          </div>
+                        )}
+                        {obj.statusError && (
+                          <div style={{
+                            marginTop: '8px',
+                            fontSize: '13px',
+                            color: '#ef4444'
+                          }}>
+                            ❌ Status update failed: {obj.statusError}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Failed Objects */}
+              {publishResults.failed.length > 0 && (
+                <div>
+                  <h3 style={{
+                    margin: '0 0 16px 0',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#ef4444',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <XCircle size={18} />
+                    Failed to Publish ({publishResults.failed.length})
+                  </h3>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '12px'
+                  }}>
+                    {publishResults.failed.map((obj, index) => (
+                      <div key={index} style={{
+                        padding: '16px',
+                        backgroundColor: '#fef2f2',
+                        border: '1px solid #fecaca',
+                        borderRadius: '8px'
+                      }}>
+                        <div style={{
+                          fontWeight: 600,
+                          color: '#002329',
+                          marginBottom: '8px'
+                        }}>
+                          {obj.type}: "{obj.name}"
+                        </div>
+                        <div style={{
+                          fontSize: '13px',
+                          color: '#ef4444',
+                          marginTop: '8px',
+                          whiteSpace: 'pre-wrap',
+                          wordWrap: 'break-word'
+                        }}>
+                          Error: {obj.error && typeof obj.error === 'string' 
+                            ? obj.error.replace(/\n/g, ' ').trim()
+                            : obj.error}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #e2e8f0',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              flexShrink: 0
+            }}>
+              <button
+                onClick={() => {
+                  setShowPublishResultsModal(false);
+                  if (publishResults.failed.length === 0) {
+                    // If all successful, navigate after closing modal
+                    setTimeout(() => {
+                      navigate('/dashboard');
+                    }, 500);
+                  }
+                }}
+                style={{
+                  padding: '10px 20px',
+                  backgroundColor: '#08979C',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontFamily: 'Poppins',
+                  transition: 'background-color 0.2s'
+                }}
+                onMouseEnter={(e) => e.target.style.backgroundColor = '#067a7f'}
+                onMouseLeave={(e) => e.target.style.backgroundColor = '#08979C'}
+              >
+                {publishResults.failed.length === 0 ? 'Continue' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default QuickSetupWizard;
+// Force rebuild - structure verified

@@ -1,0 +1,276 @@
+.field-selector {
+  margin-bottom: 16px;
+}
+
+.field-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.field-selector-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.field-selector-action-btn {
+  padding: 4px 8px;
+  background: #f0f0f0;
+  color: #666;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: 'Poppins', sans-serif;
+}
+
+.field-selector-action-btn:hover:not(:disabled) {
+  background: #e0e0e0;
+}
+
+.field-selector-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field-selector-search {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.field-selector-search-icon {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #999;
+  pointer-events: none;
+}
+
+.field-selector-search-input {
+  width: 100%;
+  padding: 8px 12px 8px 36px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.field-selector-search-input:focus {
+  outline: none;
+  border-color: #08979C;
+}
+
+.field-selector-clear-search {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: #999;
+  display: flex;
+  align-items: center;
+}
+
+.field-selector-clear-search:hover {
+  color: #666;
+}
+
+.field-selector-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  padding: 8px;
+  background: #fff;
+}
+
+.field-selector-empty {
+  padding: 20px;
+  text-align: center;
+  color: #666;
+  font-size: 12px;
+}
+
+.field-selector-summary {
+  margin-top: 8px;
+  padding: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+}
+
+/* Field Group */
+.field-group {
+  margin-bottom: 8px;
+}
+
+.field-group-header {
+  padding: 8px;
+  background: #f5f5f5;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.field-group-header:hover {
+  background: #e8e8e8;
+}
+
+.field-group-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-group-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #002329;
+}
+
+.field-group-count {
+  font-size: 11px;
+  color: #666;
+  font-weight: normal;
+}
+
+.field-group-items {
+  margin-top: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Field Item */
+.field-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.field-item:hover {
+  background: #f5f5f5;
+}
+
+.field-item.selected {
+  background: #e6fffa;
+  border: 1px solid #08979C;
+}
+
+.field-item-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.field-item-icon {
+  color: #08979C;
+  flex-shrink: 0;
+}
+
+.field-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-item-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 2px;
+}
+
+.field-item-name {
+  font-size: 13px;
+  color: #002329;
+  font-weight: 500;
+}
+
+.field-item-required {
+  color: #ff4d4f;
+  font-size: 12px;
+}
+
+.field-item-help-icon {
+  position: relative;
+  color: #999;
+  cursor: help;
+}
+
+.field-item-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 4px;
+  padding: 6px 8px;
+  background: #002329;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.field-item-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: #002329;
+}
+
+.field-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #666;
+}
+
+.field-item-api-name {
+  font-family: 'Courier New', monospace;
+}
+
+.field-item-type {
+  padding: 2px 6px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.field-item-check {
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+
+.field-item-check-icon {
+  color: #08979C;
+}
+
+.field-item-check-empty {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #d9d9d9;
+  border-radius: 3px;
+}
+
+.field-item.selected .field-item-check-empty {
+  display: none;
+}
+

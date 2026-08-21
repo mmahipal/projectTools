@@ -1,0 +1,436 @@
+/* Global Header Styles - Standardized across all pages */
+/* This ensures consistent header layout, height, width, and styling */
+
+/* Common header classes - apply to all page headers */
+[class*="-header"],
+.dashboard-header,
+.setup-header,
+.client-tool-account-header,
+.queue-status-management-header,
+.settings-header,
+.confirmation-header,
+.workstream-reporting-header,
+.projects-header,
+.create-workstream-header,
+.administration-header,
+.global-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 4px 16px;
+  margin: 0 calc(-1 * var(--spacing-lg)) var(--spacing-md);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: none;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+}
+
+/* Header content - consistent across all pages */
+.header-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  box-sizing: border-box;
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+  position: relative;
+  z-index: 999999 !important;
+}
+
+/* Header left section */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex: 1;
+  min-width: 0;
+}
+
+/* Menu toggle button - consistent size and style */
+.header-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: #002329;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+}
+
+.header-menu-toggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Page title - consistent styling */
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+  padding: 0;
+}
+
+/* Page subtitle - consistent styling */
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 400;
+  line-height: 1.3;
+  margin: 0;
+  padding: 0;
+}
+
+/* Header user profile section */
+.header-user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  flex-shrink: 0;
+  overflow: visible !important;
+  position: relative;
+  z-index: 999999 !important;
+  height: 40px;
+  max-height: 40px;
+}
+
+/* User Profile Dropdown - Global Styles */
+.user-profile-dropdown {
+  position: relative;
+  display: inline-block;
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+  height: 40px;
+  max-height: 40px;
+  z-index: 999999 !important;
+}
+
+.user-avatar-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease;
+  height: 40px;
+  width: 40px;
+}
+
+.user-avatar-button:hover {
+  transform: scale(1.05);
+}
+
+.user-avatar-button:focus {
+  outline: 2px solid #08979C;
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+
+.user-profile-dropdown .user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #08979C;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: Poppins;
+}
+
+.user-profile-dropdown .user-avatar:hover {
+  background: #067a7f;
+  box-shadow: 0 2px 8px rgba(8, 151, 156, 0.3);
+}
+
+.user-profile-dropdown-menu {
+  position: fixed !important;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 160px;
+  z-index: 999999 !important;
+  overflow: visible !important;
+  overflow-y: visible !important;
+  overflow-x: visible !important;
+  animation: slideDown 0.2s ease;
+  white-space: nowrap;
+  max-height: none;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdown-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 16px;
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--text-primary, #002329);
+  transition: background-color 0.2s ease;
+  font-family: Poppins;
+  box-sizing: border-box;
+}
+
+.dropdown-menu-item:hover {
+  background-color: #f5f5f5;
+}
+
+.dropdown-menu-item:active {
+  background-color: #e5e7eb;
+}
+
+.dropdown-menu-item svg {
+  color: var(--text-secondary, #6b7280);
+  flex-shrink: 0;
+}
+
+.dropdown-menu-item:hover svg {
+  color: var(--text-primary, #002329);
+}
+
+/* User profile container */
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* User avatar - consistent size with teal background */
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: #08979C;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* User name */
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+  font-family: Poppins;
+}
+
+/* Ensure header-right section doesn't have scrollbars and has high z-index */
+.header-right {
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+  position: relative;
+  z-index: 999999 !important;
+}
+
+/* Force overflow visible and high z-index on all header-user-profile instances across all pages */
+.header-user-profile,
+[class*="-header"] .header-user-profile,
+[class*="-container"] .header-user-profile,
+.case-management .header-user-profile,
+.client-tool-account .header-user-profile,
+.workstream-reporting .header-user-profile,
+.project-roster-funnel-container .header-user-profile,
+.case-analytics-header .header-user-profile,
+.queue-status-management .header-user-profile,
+.create-workstream .header-user-profile,
+.update-object-fields-header .header-user-profile,
+.active-contributors-by-project-container .header-user-profile,
+.active-project-objectives-by-qual-step-container .header-user-profile,
+.onboarding-contributors-container .header-user-profile,
+.po-pay-rates-container .header-user-profile,
+.po-productivity-targets-container .header-user-profile,
+.mfa-verification-logs-container .header-user-profile,
+.contributor-match-matrix-container .header-user-profile,
+.contributor-payments-dashboard .header-user-profile,
+.contributor-time-status-dashboard .header-user-profile,
+.project-performance .header-user-profile {
+  overflow: visible !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+  max-height: 40px !important;
+  z-index: 999999 !important;
+  position: relative !important;
+}
+
+/* Ensure dropdown menu has highest z-index on all pages */
+.user-profile-dropdown-menu,
+[class*="-header"] .user-profile-dropdown-menu,
+[class*="-container"] .user-profile-dropdown-menu,
+.case-management .user-profile-dropdown-menu,
+.client-tool-account .user-profile-dropdown-menu,
+.workstream-reporting .user-profile-dropdown-menu,
+.project-roster-funnel-container .user-profile-dropdown-menu,
+.case-analytics-header .user-profile-dropdown-menu,
+.queue-status-management .user-profile-dropdown-menu,
+.create-workstream .user-profile-dropdown-menu,
+.update-object-fields-header .user-profile-dropdown-menu,
+.active-contributors-by-project-container .user-profile-dropdown-menu,
+.active-project-objectives-by-qual-step-container .user-profile-dropdown-menu,
+.onboarding-contributors-container .user-profile-dropdown-menu,
+.po-pay-rates-container .user-profile-dropdown-menu,
+.po-productivity-targets-container .user-profile-dropdown-menu,
+.mfa-verification-logs-container .user-profile-dropdown-menu,
+.contributor-match-matrix-container .user-profile-dropdown-menu,
+.contributor-payments-dashboard .user-profile-dropdown-menu,
+.contributor-time-status-dashboard .user-profile-dropdown-menu,
+.project-performance .user-profile-dropdown-menu {
+  z-index: 999999 !important;
+}
+
+/* User info container */
+.user-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.user-role {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 400;
+}
+
+/* Logout button */
+.logout-btn,
+.logout-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+  padding: 0;
+  margin-left: 8px;
+}
+
+.logout-btn:hover,
+.logout-button:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--text-primary);
+}
+
+/* Ensure header doesn't break on smaller screens */
+@media (max-width: 768px) {
+  .header-content {
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+  }
+  
+  .header-left {
+    flex: 1 1 100%;
+  }
+  
+  .header-user-profile {
+    flex: 1 1 auto;
+    justify-content: flex-end;
+  }
+  
+  .user-name {
+    display: none;
+  }
+  
+  .user-role {
+    display: none;
+  }
+}
+
+/* Global Spinner Styles - Standardized loading indicator across all pages */
+.spinner {
+  animation: spin 1s linear infinite;
+  color: #0176d3;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Loading container styles */
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  min-height: calc(100vh - 200px);
+  padding: 60px 20px;
+  width: 100%;
+  text-align: center;
+}
+
+.loading-container .spinner,
+.loading-container .spinning {
+  animation: spin 1s linear infinite;
+  color: #0176d3;
+  margin-bottom: 0;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.loading-container p {
+  color: #706e6b;
+  font-size: 14px;
+  margin: 0;
+}
+
+

@@ -1,0 +1,163 @@
+.workstream-management {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  transition: margin-left var(--transition-base);
+  width: 100%;
+  color: #002329;
+  font-family: Poppins;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.workstream-management-container {
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  box-sizing: border-box;
+  color: #002329;
+  font-family: Poppins;
+  font-size: 14px;
+}
+
+.workstream-management-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 4px 16px;
+  margin: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: none;
+}
+
+.workstream-management .header-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+}
+
+.workstream-management .header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.workstream-management .header-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: #002329;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+}
+
+.workstream-management .header-menu-toggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.workstream-management .page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.workstream-management .page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 2px 0 0 0;
+}
+
+.workstream-management-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #e2e8f0;
+  background: var(--surface);
+  padding: 0 24px;
+  margin: 0;
+}
+
+.workstream-management-tabs .tab-button {
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: Poppins;
+  margin-bottom: -2px;
+}
+
+.workstream-management-tabs .tab-button:hover {
+  color: #08979C;
+  background: rgba(8, 151, 156, 0.05);
+}
+
+.workstream-management-tabs .tab-button.active {
+  color: #08979C;
+  border-bottom-color: #08979C;
+  font-weight: 600;
+}
+
+.workstream-management-content {
+  padding: 24px;
+  background: var(--bg-primary);
+}
+
+.tab-content-wrapper {
+  width: 100%;
+}
+
+.create-workstream-content-wrapper,
+.workstream-reporting-content-wrapper {
+  width: 100%;
+  padding: 0;
+}
+
+.create-workstream-content-wrapper .create-workstream-form {
+  margin: 0;
+}
+
+.create-workstream-content-wrapper .form-grid-two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.create-workstream-content-wrapper .form-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.workstream-reporting-content-wrapper .workstream-reporting-content {
+  margin: 0;
+  padding: 0;
+}
+
+/* Ensure 2-column layout works in tab view */
+.tab-content-wrapper .create-workstream-content-wrapper .form-grid-two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .tab-content-wrapper .create-workstream-content-wrapper .form-grid-two-column {
+    grid-template-columns: 1fr;
+  }
+}
+

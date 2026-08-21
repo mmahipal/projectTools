@@ -1,0 +1,241 @@
+.payment-adjustment-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.payment-adjustment-modal {
+  background: #fff;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  font-family: Poppins;
+}
+
+.payment-adjustment-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.payment-adjustment-modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #002329;
+}
+
+.payment-adjustment-modal-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.payment-adjustment-modal-close:hover {
+  background: #f3f4f6;
+  color: #002329;
+}
+
+.payment-adjustment-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.payment-adjustment-section {
+  margin-bottom: 32px;
+}
+
+.payment-adjustment-section:last-child {
+  margin-bottom: 0;
+}
+
+.payment-adjustment-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #002329;
+  margin: 0 0 20px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.payment-adjustment-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.payment-adjustment-form-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.payment-adjustment-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.payment-adjustment-form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #002329;
+  display: flex;
+  align-items: center;
+}
+
+.payment-adjustment-form-group .required {
+  color: #ef4444;
+  margin-left: 2px;
+}
+
+.payment-adjustment-form-group input,
+.payment-adjustment-form-group select,
+.payment-adjustment-form-group textarea {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: Poppins;
+  color: #002329;
+  background: #fff;
+  transition: all 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.payment-adjustment-form-group input:focus,
+.payment-adjustment-form-group select:focus,
+.payment-adjustment-form-group textarea:focus {
+  outline: none;
+  border-color: #08979C;
+  box-shadow: 0 0 0 3px rgba(8, 151, 156, 0.1);
+}
+
+.payment-adjustment-form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.payment-adjustment-search-input {
+  padding-left: 36px !important;
+}
+
+.payment-adjustment-search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #666;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.payment-adjustment-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10001;
+  margin-top: 4px;
+}
+
+.payment-adjustment-dropdown-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #002329;
+  transition: background 0.2s;
+}
+
+.payment-adjustment-dropdown-item:hover {
+  background: #f3f4f6;
+}
+
+.payment-adjustment-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.payment-adjustment-btn-cancel,
+.payment-adjustment-btn-publish {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: Poppins;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.payment-adjustment-btn-cancel {
+  background: #fff;
+  color: #002329;
+  border: 1px solid #d1d5db;
+}
+
+.payment-adjustment-btn-cancel:hover:not(:disabled) {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.payment-adjustment-btn-publish {
+  background: #08979C;
+  color: #fff;
+  border: none;
+}
+
+.payment-adjustment-btn-publish:hover:not(:disabled) {
+  background: #067a7f;
+}
+
+.payment-adjustment-btn-cancel:disabled,
+.payment-adjustment-btn-publish:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+

@@ -1,0 +1,1835 @@
+const express = require('express');
+const jsforce = require('jsforce');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const router = express.Router();
+const { authenticate, authorize } = require('../middleware/auth');
+
+// Async error wrapper - catches errors from async route handlers
+const asyncHandler = (fn) => {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+};
+
+// Encryption key (in production, use environment variable)
+// Generate a consistent key from environment or use a default
+const getEncryptionKey = () => {
+  if (process.env.ENCRYPTION_KEY) {
+    // If provided, ensure it's 32 bytes (64 hex characters)
+    const key = process.env.ENCRYPTION_KEY;
+    if (key.length >= 64) {
+      return Buffer.from(key.slice(0, 64), 'hex');
+    }
+    // Pad or hash if needed
+    return crypto.createHash('sha256').update(key).digest();
+  }
+  // Default key (in production, always use ENV variable)
+  return crypto.createHash('sha256').update('default-salesforce-encryption-key-change-in-production').digest();
+};
+
+const ENCRYPTION_KEY = getEncryptionKey();
+const ALGORITHM = 'aes-256-cbc';
+const IV_LENGTH = 16;
+
+// Helper functions for encryption/decryption
+function encrypt(text) {
+  if (!text) return '';
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+function decrypt(text) {
+  if (!text) return '';
+  try {
+    const textParts = text.split(':');
+    if (textParts.length !== 2) {
+      console.warn('Invalid encrypted text format, returning empty string');
+      return '';
+    }
+    const iv = Buffer.from(textParts[0], 'hex');
+    const encryptedText = textParts[1];
+    const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (error) {
+    console.warn('Decryption error:', error.message);
+    return '';
+  }
+}
+
+// Get settings file path
+const getSettingsPath = () => {
+  const settingsDir = path.join(__dirname, '../data');
+  if (!fs.existsSync(settingsDir)) {
+    fs.mkdirSync(settingsDir, { recursive: true });
+  }
+  return path.join(settingsDir, 'salesforce-settings.json');
+};
+
+// Save Salesforce settings
+router.post('/settings', authenticate, authorize('all'), (req, res) => {
+  try {
+    const { salesforceUrl, username, password, securityToken, domain, loginUrl } = req.body;
+
+    // Support both new field name (salesforceUrl) and old field name (loginUrl) for backward compatibility
+    // Use ONLY the user-provided URL, no fallback to defaults
+    const url = salesforceUrl || loginUrl;
+
+    if (!url || !url.trim()) {
+      return res.status(400).json({ error: 'Salesforce URL is required' });
+    }
+
+    if (!username || !password || !securityToken) {
+      return res.status(400).json({ error: 'Username, password, and security token are required' });
+    }
+
+    // Auto-detect domain from URL if not provided (but don't force specific domains)
+    let detectedDomain = domain;
+    if (!detectedDomain) {
+      // Try to detect from URL, but don't force specific values
+      const urlLower = url.toLowerCase();
+      if (urlLower.includes('test.salesforce.com')) {
+        detectedDomain = 'test';
+      } else if (urlLower.includes('login.salesforce.com')) {
+        detectedDomain = 'login';
+      } else {
+        // For custom domains, use a generic value or extract from URL
+        detectedDomain = 'custom';
+      }
+    }
+
+    // Encrypt sensitive data
+    const encryptedSettings = {
+      salesforceUrl: url,
+      username: encrypt(username),
+      password: encrypt(password),
+      securityToken: encrypt(securityToken),
+      domain: detectedDomain,
+      loginUrl: url, // Keep for backward compatibility
+      updatedAt: new Date().toISOString(),
+      updatedBy: req.user.email
+    };
+
+    // Save to file
+    const settingsPath = getSettingsPath();
+    fs.writeFileSync(settingsPath, JSON.stringify(encryptedSettings, null, 2));
+
+    res.json({ 
+      message: 'Settings saved successfully',
+      settings: {
+        salesforceUrl: url,
+        domain: detectedDomain
+      }
+    });
+  } catch (error) {
+    console.error('Error saving Salesforce settings:', error);
+    res.status(500).json({ error: 'Error saving settings' });
+  }
+});
+
+// Get Salesforce settings
+router.get('/settings', authenticate, (req, res) => {
+  try {
+    const settingsPath = getSettingsPath();
+    
+    if (!fs.existsSync(settingsPath)) {
+      // Return empty settings instead of 404 - no default URL
+      return res.status(200).json({
+        salesforceUrl: '',
+        username: '',
+        password: '',
+        securityToken: '',
+        domain: '',
+        loginUrl: ''
+      });
+    }
+
+    let encryptedSettings;
+    try {
+      encryptedSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    } catch (parseError) {
+      console.error('Error parsing settings file:', parseError);
+      // Return empty settings if file is corrupted - no default URL
+      return res.status(200).json({
+        salesforceUrl: '',
+        username: '',
+        password: '',
+        securityToken: '',
+        domain: '',
+        loginUrl: ''
+      });
+    }
+
+    // Decrypt sensitive data - decrypt function now handles errors gracefully
+    // Use only the saved URL, no default fallback
+    const decryptedSettings = {
+      salesforceUrl: encryptedSettings.salesforceUrl || encryptedSettings.loginUrl || '',
+      username: decrypt(encryptedSettings.username || ''),
+      password: decrypt(encryptedSettings.password || ''),
+      securityToken: decrypt(encryptedSettings.securityToken || ''),
+      domain: encryptedSettings.domain || '',
+      loginUrl: encryptedSettings.salesforceUrl || encryptedSettings.loginUrl || '' // Backward compatibility
+    };
+
+    res.status(200).json(decryptedSettings);
+  } catch (error) {
+    console.error('Error reading Salesforce settings:', error);
+    // Always return 200 with empty settings on error - no default URL
+    res.status(200).json({
+      salesforceUrl: '',
+      username: '',
+      password: '',
+      securityToken: '',
+      domain: '',
+      loginUrl: ''
+    });
+  }
+});
+
+// Test Salesforce connection
+router.post('/test', authenticate, async (req, res) => {
+  const { salesforceUrl, username, password, securityToken, domain, loginUrl } = req.body;
+
+  // Log the raw request body for debugging (without sensitive data)
+  console.log('Test connection request received:', {
+    salesforceUrl: salesforceUrl,
+    loginUrl: loginUrl,
+    domain: domain,
+    hasUsername: !!username,
+    hasPassword: !!password,
+    hasSecurityToken: !!securityToken
+  });
+
+  // Support both new field name (salesforceUrl) and old field name (loginUrl) for backward compatibility
+  // Use ONLY the user-provided URL, no fallback to defaults
+  const connectionUrl = salesforceUrl || loginUrl;
+  
+  console.log('Connection URL extracted:', connectionUrl);
+
+  // Validate required fields - require user-provided URL
+  if (!connectionUrl || !connectionUrl.trim()) {
+    return res.status(400).json({ 
+      success: false,
+      message: 'Salesforce URL is required. Please provide your Salesforce URL.' 
+    });
+  }
+
+  if (!username || username.trim() === '') {
+    return res.status(400).json({ 
+      success: false,
+      message: 'Username is required' 
+    });
+  }
+
+  if (!password || password.trim() === '') {
+    return res.status(400).json({ 
+      success: false,
+      message: 'Password is required' 
+    });
+  }
+
+  if (!securityToken || securityToken.trim() === '') {
+    return res.status(400).json({ 
+      success: false,
+      message: 'Security token is required' 
+    });
+  }
+
+  try {
+    // Normalize the connection URL - ensure it's the base URL without paths
+    // Convert to string and trim whitespace
+    let normalizedUrl = String(connectionUrl || '').trim();
+    
+    // Log the original URL for debugging
+    console.log('Original connection URL:', connectionUrl);
+    console.log('Original URL type:', typeof connectionUrl);
+    console.log('Normalized URL after trim:', normalizedUrl);
+    console.log('Normalized URL type:', typeof normalizedUrl);
+    
+    // Check if URL is empty after trimming
+    if (!normalizedUrl || normalizedUrl === '' || normalizedUrl.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Salesforce URL is required'
+      });
+    }
+    
+    // Remove any trailing slashes (but keep the domain)
+    normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+    
+    // Remove any SOAP or API paths if accidentally included (but preserve the domain)
+    // Only remove if /services/ appears after the domain
+    normalizedUrl = normalizedUrl.replace(/\/services\/.*$/i, '');
+    
+    // Log the normalized URL before validation
+    console.log('Normalized URL after path removal:', normalizedUrl);
+    
+    // Ensure it's a valid Salesforce URL - must start with https://
+    if (!normalizedUrl || !normalizedUrl.startsWith('https://')) {
+      console.log('URL validation failed: does not start with https://. URL:', normalizedUrl);
+      return res.status(400).json({
+        success: false,
+        message: `Salesforce URL must start with https:// (e.g., https://login.salesforce.com or https://test.salesforce.com). Received: "${normalizedUrl}"`
+      });
+    }
+
+    // Validate it's a Salesforce domain - use a simple, robust check
+    // Accept URLs with any of these Salesforce domain patterns:
+    // - *.salesforce.com (standard domains)
+    // - *.lightning.force.com (Lightning domains)
+    // - *.force.com (force.com domains)
+    // - *.my.salesforce.com (My Domain)
+    const urlLower = String(normalizedUrl).toLowerCase();
+    const hasSalesforceDomain = urlLower.includes('salesforce.com') || 
+                                urlLower.includes('lightning.force.com') || 
+                                urlLower.includes('.force.com');
+    
+    console.log('URL validation check:', {
+      originalConnectionUrl: connectionUrl,
+      normalizedUrl: normalizedUrl,
+      urlLower: urlLower,
+      hasSalesforceDomain: hasSalesforceDomain,
+      hasSalesforceCom: urlLower.includes('salesforce.com'),
+      hasLightningForce: urlLower.includes('lightning.force.com'),
+      hasForceCom: urlLower.includes('.force.com'),
+      type: typeof normalizedUrl,
+      length: normalizedUrl.length
+    });
+    
+    if (!hasSalesforceDomain) {
+      console.error('URL validation failed: does not contain a valid Salesforce domain');
+      console.error('Original connection URL:', connectionUrl);
+      console.error('Original URL type:', typeof connectionUrl);
+      console.error('Normalized URL:', JSON.stringify(normalizedUrl));
+      console.error('Normalized URL type:', typeof normalizedUrl);
+      console.error('Normalized URL length:', normalizedUrl.length);
+      console.error('URL lower:', urlLower);
+      return res.status(400).json({
+        success: false,
+        message: `Invalid Salesforce URL. Must be a Salesforce domain (e.g., https://login.salesforce.com, https://test.salesforce.com, or https://yourdomain.lightning.force.com). Received: "${normalizedUrl}"`
+      });
+    }
+
+    // Log the final normalized URL for debugging (without sensitive data)
+    console.log('Final normalized URL for connection:', normalizedUrl);
+
+    // Convert Lightning URLs to appropriate login URLs for jsforce
+    // Lightning URLs are for the UI, but jsforce needs the SOAP API login URL
+    // Reuse urlLower from validation above
+    let loginUrlForConnection = normalizedUrl;
+    
+    if (urlLower.includes('lightning.force.com')) {
+      // Lightning URLs need to be converted to the appropriate login URL
+      // For sandbox Lightning URLs, use test.salesforce.com
+      // For production Lightning URLs, use login.salesforce.com
+      if (urlLower.includes('.sandbox.') || urlLower.includes('--staging') || urlLower.includes('--dev')) {
+        loginUrlForConnection = 'https://test.salesforce.com';
+        console.log('Converted Lightning sandbox URL to test.salesforce.com');
+      } else {
+        loginUrlForConnection = 'https://login.salesforce.com';
+        console.log('Converted Lightning production URL to login.salesforce.com');
+      }
+    } else if (urlLower.includes('.my.salesforce.com')) {
+      // My Domain URLs - try to determine if it's sandbox or production
+      // For now, default to login.salesforce.com, but could be enhanced
+      loginUrlForConnection = 'https://login.salesforce.com';
+      console.log('Converted My Domain URL to login.salesforce.com');
+    }
+    
+    console.log('Using login URL for connection:', loginUrlForConnection);
+
+    // Create Salesforce connection
+    // For jsforce, we need to use the base URL without any paths
+    // jsforce will automatically append the correct SOAP endpoint
+    const conn = new jsforce.Connection({
+      loginUrl: loginUrlForConnection
+    });
+
+    // Login to Salesforce - jsforce 3.x uses promises
+    // Combine password and security token for login
+    const fullPassword = password + securityToken;
+    
+    console.log('Attempting login for user:', username);
+    const userInfo = await conn.login(username, fullPassword);
+    console.log('Login successful, user ID:', userInfo.id);
+
+    // Test connection by querying user info
+    const result = await conn.query(`SELECT Id, Name, Email FROM User WHERE Id = '${userInfo.id}'`);
+
+    if (result.records && result.records.length > 0) {
+      const user = result.records[0];
+      res.json({
+        success: true,
+        message: 'Connection successful!',
+        userInfo: {
+          Id: user.Id,
+          Name: user.Name,
+          Email: user.Email
+        },
+        salesforceUrl: normalizedUrl
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        message: 'Could not retrieve user information'
+      });
+    }
+  } catch (error) {
+    console.error('Salesforce connection error:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.errorCode,
+      statusCode: error.statusCode
+    });
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to connect to Salesforce. Please check your credentials and try again.';
+    
+    if (error.message) {
+      if (error.message.includes('405') || error.message.includes('Only POST allowed')) {
+        errorMessage = 'Invalid Salesforce URL format. Lightning URLs are automatically converted to login URLs. If you continue to see this error, please try using the standard login URL (https://login.salesforce.com for Production or https://test.salesforce.com for Sandbox).';
+      } else if (error.message.includes('INVALID_LOGIN') || error.message.includes('authentication failure')) {
+        errorMessage = 'Invalid username, password, or security token. Please check your credentials.';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        errorMessage = 'Authentication failed. Please verify your username, password, and security token.';
+      } else if (error.message.includes('ENOTFOUND') || error.message.includes('getaddrinfo')) {
+        errorMessage = 'Unable to resolve the Salesforce URL. Please check that the URL is correct and accessible.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    res.status(400).json({
+      success: false,
+      message: errorMessage
+    });
+  }
+});
+
+// Shared function to create project in Salesforce (can be called directly or via HTTP)
+async function createProjectInSalesforce(projectData, user) {
+  // Get Salesforce settings
+  const settingsPath = getSettingsPath();
+  
+  if (!fs.existsSync(settingsPath)) {
+    throw new Error('Salesforce settings not configured. Please configure Salesforce settings first.');
+  }
+
+  let encryptedSettings;
+  try {
+    encryptedSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  } catch (parseError) {
+    console.error('Error parsing settings file:', parseError);
+    throw new Error('Error reading Salesforce settings. Please reconfigure your Salesforce settings.');
+  }
+
+  // Decrypt credentials
+  const salesforceUrl = encryptedSettings.salesforceUrl || encryptedSettings.loginUrl || '';
+  const username = decrypt(encryptedSettings.username || '');
+  const password = decrypt(encryptedSettings.password || '');
+  const securityToken = decrypt(encryptedSettings.securityToken || '');
+
+  if (!salesforceUrl || !username || !password || !securityToken) {
+    throw new Error('Salesforce credentials are incomplete. Please reconfigure your Salesforce settings.');
+  }
+
+  // Normalize Salesforce URL
+  let normalizedUrl = String(salesforceUrl).trim();
+  normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+  normalizedUrl = normalizedUrl.replace(/\/services\/.*$/i, '');
+  
+  // Convert Lightning URLs to appropriate login URLs for jsforce
+  const urlLower = normalizedUrl.toLowerCase();
+  let loginUrlForConnection = normalizedUrl;
+  
+  if (urlLower.includes('lightning.force.com')) {
+    if (urlLower.includes('.sandbox.') || urlLower.includes('--staging') || urlLower.includes('--dev')) {
+      loginUrlForConnection = 'https://test.salesforce.com';
+    } else {
+      loginUrlForConnection = 'https://login.salesforce.com';
+    }
+  } else if (urlLower.includes('.my.salesforce.com')) {
+    loginUrlForConnection = 'https://login.salesforce.com';
+  }
+
+  // Create Salesforce connection
+  const conn = new jsforce.Connection({
+    loginUrl: loginUrlForConnection
+  });
+
+  // Login to Salesforce
+  const fullPassword = password + securityToken;
+  const userInfo = await conn.login(username, fullPassword);
+  console.log('Salesforce login successful for project creation, user ID:', userInfo.id);
+
+  // Map project data to Salesforce object fields
+  const salesforceProjectData = {
+    // Basic Information Fields
+    Name: projectData.projectName || projectData.name || 'New Project',
+    Short_Project_Name__c: projectData.shortProjectName,
+    Contributor_Project_Name__c: projectData.contributorProjectName,
+    Auditor_Project__c: projectData.auditorProject || false,
+    Appen_Partner__c: projectData.appenPartner,
+    Job_Category__c: projectData.jobCategory,
+    Project_Short_Description__c: projectData.projectShortDescription,
+    Project_Long_Description__c: projectData.projectLongDescription,
+    Project_Type__c: projectData.projectType,
+    Project_Priority__c: projectData.projectPriority,
+    Project_ID_for_Reports__c: projectData.projectIdForReports,
+    Workday_Project_ID__c: projectData.workdayProjectId,
+    Account__c: projectData.account,
+    Program_Name__c: projectData.programName,
+    Hire_Start_Date__c: projectData.hireStartDate,
+    Predicted_Close_Date__c: projectData.predictedCloseDate,
+    Delivery_Tool_Org__c: projectData.deliveryToolOrg,
+    Delivery_Tool_Name__c: projectData.deliveryToolName,
+    Project_Page__c: projectData.projectPage,
+    Project_Status__c: projectData.projectStatus,
+    
+    // Contributor Active Status Fields
+    Payment_Setup_Required__c: projectData.paymentSetupRequired || false,
+    Manual_Activation_Required__c: projectData.manualActivationRequired || false,
+    Client_Tool_Account_Required__c: projectData.clientToolAccountRequired || false,
+    
+    // People Fields
+    Program_Manager__c: projectData.programManager,
+    Project_Manager__c: projectData.projectManager,
+    Quality_Lead__c: projectData.qualityLead,
+    Productivity_Lead__c: projectData.productivityLead,
+    Reporting_Lead__c: projectData.reportingLead,
+    Invoicing_Lead__c: projectData.invoicingLead,
+    Project_Support_Lead__c: projectData.projectSupportLead,
+    Cases_DC_Support_Team__c: projectData.casesDCSupportTeam || false,
+    Recruitment_Lead__c: projectData.recruitmentLead,
+    Qualification_Lead__c: projectData.qualificationLead,
+    Onboarding_Lead__c: projectData.onboardingLead,
+    
+    // Rates Fields
+    Project_Incentive__c: projectData.projectIncentive,
+    
+    // Funnel Totals Fields
+    Total_Applied__c: projectData.totalApplied,
+    Total_Qualified__c: projectData.totalQualified,
+    
+    // Funnel Stages Fields
+    Invited_Available_Contributors__c: projectData.invitedAvailableContributors,
+    Registered_Contributors__c: projectData.registeredContributors,
+    App_Received__c: projectData.appReceived,
+    Qualified_Contributors__c: projectData.qualifiedContributors,
+    Matched_Contributors__c: projectData.matchedContributors,
+    Active_Contributors__c: projectData.activeContributors,
+    AC_Account__c: projectData.acAccount,
+    Production_Contributors__c: projectData.productionContributors,
+    Applied_Contributors__c: projectData.appliedContributors,
+    Removed__c: projectData.removed,
+    
+    // Lever Requisition Actions Fields
+    Requisition_Action__c: projectData.requisitionAction,
+    
+    // Lever Requisition Fields
+    Lever_Req_Name__c: projectData.leverReqName,
+    Requisition_Status__c: projectData.requisitionStatus,
+    Lever_Req_Code__c: projectData.leverReqCode,
+    Lever_Time_to_Fill_Start__c: projectData.leverTimeToFillStart,
+    Lever_Crowd_Hiring_Manager_Email__c: projectData.leverCrowdHiringManagerEmail,
+    Lever_Time_to_Fill_End__c: projectData.leverTimeToFillEnd,
+    Lever_Crowd_Owner_Email__c: projectData.leverCrowdOwnerEmail,
+    Lever_Req_Description__c: projectData.leverReqDescription,
+    Lever_Compensation_Band__c: projectData.leverCompensationBand,
+    Lever_Location__c: projectData.leverLocation,
+    Lever_Department__c: projectData.leverDepartment,
+    Lever_Work_Type__c: projectData.leverWorkType,
+    Lever_SVP__c: projectData.leverSVP,
+    Lever_SVP2__c: projectData.leverSVP2,
+    
+    // Lever Admin Fields
+    Lever_Requisition_ID__c: projectData.leverRequisitionID,
+    Lever_Requisition_Create_Date__c: projectData.leverRequisitionCreateDate,
+    
+    // Payment Configurations Fields
+    Project_Payment_Method__c: projectData.projectPaymentMethod,
+    Require_PM_Approval_for_Productivity__c: projectData.requirePMApprovalForProductivity || false,
+    Release_System_Tracked_Data__c: projectData.releaseSystemTrackedData,
+    
+    // Activation Fields
+    Activate_Comms_Invited__c: projectData.activateCommsInvited || false,
+    Activate_Comms_Applied__c: projectData.activateCommsApplied || false,
+    Activate_Comms_Onboarding__c: projectData.activateCommsOnboarding || false,
+    Activate_Comms_Failed__c: projectData.activateCommsFailed || false
+  };
+  
+  // Remove undefined/null/empty string values to avoid Salesforce errors
+  // BUT always keep required fields (Name, Contributor_Project_Name__c, Project_Type__c)
+  Object.keys(salesforceProjectData).forEach(key => {
+    const value = salesforceProjectData[key];
+    // Always keep Name field - it's required in Salesforce
+    if (key === 'Name') {
+      // Ensure Name always has a value
+      if (!value || (typeof value === 'string' && value.trim() === '')) {
+        salesforceProjectData[key] = 'New Project';
+      }
+      return; // Don't delete Name field
+    }
+    
+    // Keep required fields even if empty (will set defaults below)
+    const requiredFields = ['Contributor_Project_Name__c', 'Project_Type__c'];
+    if (requiredFields.includes(key)) {
+      // If empty, we'll set a default below, but don't delete it yet
+      if (!value || (typeof value === 'string' && value.trim() === '')) {
+        // Keep it but mark for default value
+        return;
+      }
+      return; // Don't delete required fields
+    }
+    
+    // For other fields, remove empty values
+    if (value === undefined || value === null || value === '' || 
+        (typeof value === 'string' && value.trim() === '')) {
+      delete salesforceProjectData[key];
+    }
+  });
+  
+  // Ensure Name field is always present and has a value
+  if (!salesforceProjectData.Name || salesforceProjectData.Name.trim() === '') {
+    salesforceProjectData.Name = projectData.projectName || projectData.name || 'New Project';
+  }
+  
+  // Ensure required fields have default values if empty
+  if (!salesforceProjectData.Contributor_Project_Name__c || salesforceProjectData.Contributor_Project_Name__c.trim() === '') {
+    salesforceProjectData.Contributor_Project_Name__c = salesforceProjectData.Name || 'New Project';
+  }
+  
+  if (!salesforceProjectData.Project_Type__c || salesforceProjectData.Project_Type__c.trim() === '') {
+    salesforceProjectData.Project_Type__c = 'General'; // Default project type
+  }
+
+  // Log the data being sent to Salesforce (without sensitive info)
+  console.log('Creating project in Salesforce with', Object.keys(salesforceProjectData).length, 'fields');
+  console.log('Salesforce object type: Project__c');
+  console.log('Project Name (mapped to Name field):', salesforceProjectData.Name);
+
+  // Check if Project__c object exists before attempting to create
+  let objectType = 'Project__c';
+  let projectObjectExists = false;
+  
+  try {
+    // Try to describe the object to check if it exists
+    const objectDescribe = await conn.sobject(objectType).describe();
+    projectObjectExists = true;
+    console.log(`Project__c object exists. Label: ${objectDescribe.label}, Fields: ${objectDescribe.fields.length}`);
+  } catch (describeError) {
+    // Object doesn't exist or user doesn't have access
+    const errorMessage = describeError.message || 'Unknown error';
+    if (errorMessage.includes('INVALID_TYPE') || errorMessage.includes('NOT_FOUND') || errorMessage.includes('No such column')) {
+      console.error('Project__c object does not exist in Salesforce');
+      throw new Error(
+        'Project__c custom object does not exist in your Salesforce instance. ' +
+        'Please create the Project__c custom object in Salesforce with the required fields. ' +
+        'See documentation for field mapping details.'
+      );
+    } else {
+      // Other error (permissions, etc.)
+      console.error('Error checking Project__c object:', errorMessage);
+      throw new Error(
+        `Cannot access Project__c object in Salesforce: ${errorMessage}. ` +
+        'Please verify that the Project__c object exists and you have permissions to create records.'
+      );
+    }
+  }
+
+  // Create project in Project__c (object exists and is accessible)
+  let createdRecord;
+  try {
+    // Get object metadata to validate field values
+    const objectDescribe = await conn.sobject(objectType).describe();
+    const fieldMap = {};
+    objectDescribe.fields.forEach(field => {
+      fieldMap[field.name] = field;
+    });
+    
+    // Remove fields with invalid picklist values and lookup fields with invalid IDs
+    // BUT always preserve required fields (Name, Contributor_Project_Name__c, Project_Type__c)
+    const cleanedData = { ...salesforceProjectData };
+    const requiredFields = ['Name', 'Contributor_Project_Name__c', 'Project_Type__c'];
+    
+    Object.keys(cleanedData).forEach(fieldName => {
+      // Always keep required fields - they're required in Salesforce
+      if (requiredFields.includes(fieldName)) {
+        // Ensure required fields have values
+        if (!cleanedData[fieldName] || (typeof cleanedData[fieldName] === 'string' && cleanedData[fieldName].trim() === '')) {
+          if (fieldName === 'Name') {
+            cleanedData[fieldName] = projectData.projectName || projectData.name || 'New Project';
+          } else if (fieldName === 'Contributor_Project_Name__c') {
+            cleanedData[fieldName] = projectData.contributorProjectName || projectData.projectName || projectData.name || 'New Project';
+          } else if (fieldName === 'Project_Type__c') {
+            cleanedData[fieldName] = projectData.projectType || 'General';
+          }
+        }
+        // Don't return here - we need to validate picklist values for required fields too
+      }
+      
+      const field = fieldMap[fieldName];
+      if (!field) {
+        // Field doesn't exist in Salesforce, but don't remove required fields
+        if (!requiredFields.includes(fieldName)) {
+          console.warn(`Removing non-existent field: ${fieldName}`);
+          delete cleanedData[fieldName];
+        }
+        return;
+      }
+      
+      // Only include fields that are createable and updateable (but keep required fields)
+      if (!field.createable || !field.updateable) {
+        if (!requiredFields.includes(fieldName)) {
+          console.warn(`Removing read-only field: ${fieldName} (createable: ${field.createable}, updateable: ${field.updateable})`);
+          delete cleanedData[fieldName];
+        }
+        return;
+      }
+      
+      // Handle picklist fields
+      if (field.type === 'picklist' && field.restrictedPicklist) {
+        const value = cleanedData[fieldName];
+        if (value && !field.picklistValues.some(pv => pv.value === value)) {
+          // If this is a required field, set a default valid value instead of removing
+          if (requiredFields.includes(fieldName)) {
+            // Find the first active picklist value as default
+            const defaultValue = field.picklistValues.find(pv => pv.active !== false)?.value || field.picklistValues[0]?.value;
+            if (defaultValue) {
+              console.warn(`Invalid picklist value for required field ${fieldName}: "${value}". Setting to default: "${defaultValue}"`);
+              cleanedData[fieldName] = defaultValue;
+            } else {
+              console.warn(`No valid picklist values found for required field ${fieldName}, keeping original value: ${value}`);
+            }
+          } else {
+            // For non-required fields, remove invalid values
+            console.warn(`Removing invalid picklist value for ${fieldName}: ${value}`);
+            delete cleanedData[fieldName];
+          }
+        }
+      }
+      
+      // Handle lookup/reference fields - they need Salesforce IDs, not emails
+      if (field.type === 'reference' || field.type === 'lookup') {
+        const value = cleanedData[fieldName];
+        // If it's not a valid Salesforce ID (15 or 18 characters, alphanumeric), remove it
+        if (value && !/^[a-zA-Z0-9]{15,18}$/.test(value)) {
+          console.warn(`Removing invalid lookup value for ${fieldName}: ${value} (expected Salesforce ID)`);
+          delete cleanedData[fieldName];
+        }
+      }
+      
+      // Handle field length restrictions
+      if (field.length && field.type === 'string') {
+        const value = cleanedData[fieldName];
+        if (value && typeof value === 'string' && value.length > field.length) {
+          console.warn(`Truncating ${fieldName} from ${value.length} to ${field.length} characters`);
+          cleanedData[fieldName] = value.substring(0, field.length);
+        }
+      }
+    });
+    
+    // Ensure required fields are always present and have values (final check)
+    if (!cleanedData.Name || cleanedData.Name.trim() === '') {
+      cleanedData.Name = projectData.projectName || projectData.name || 'New Project';
+      console.warn('Name field was empty, setting to default value:', cleanedData.Name);
+    }
+    
+    if (!cleanedData.Contributor_Project_Name__c || cleanedData.Contributor_Project_Name__c.trim() === '') {
+      cleanedData.Contributor_Project_Name__c = projectData.contributorProjectName || projectData.projectName || projectData.name || 'New Project';
+      console.warn('Contributor_Project_Name__c field was empty, setting to default value:', cleanedData.Contributor_Project_Name__c);
+    }
+    
+    if (!cleanedData.Project_Type__c || cleanedData.Project_Type__c.trim() === '') {
+      // Try to get a valid picklist value for Project_Type__c
+      const projectTypeField = fieldMap['Project_Type__c'];
+      if (projectTypeField && projectTypeField.picklistValues && projectTypeField.picklistValues.length > 0) {
+        const defaultValue = projectTypeField.picklistValues.find(pv => pv.active !== false)?.value || projectTypeField.picklistValues[0]?.value;
+        cleanedData.Project_Type__c = defaultValue || 'General';
+        console.warn('Project_Type__c field was empty, setting to default picklist value:', cleanedData.Project_Type__c);
+      } else {
+        cleanedData.Project_Type__c = 'General';
+        console.warn('Project_Type__c field was empty, setting to default value:', cleanedData.Project_Type__c);
+      }
+    }
+    
+    // Log final cleaned data summary
+    console.log(`Final cleaned data: ${Object.keys(cleanedData).length} fields (removed ${Object.keys(salesforceProjectData).length - Object.keys(cleanedData).length} invalid fields)`);
+    console.log('Required fields check:', {
+      Name: cleanedData.Name,
+      Contributor_Project_Name__c: cleanedData.Contributor_Project_Name__c,
+      Project_Type__c: cleanedData.Project_Type__c
+    });
+    
+    createdRecord = await conn.sobject(objectType).create(cleanedData);
+    
+    if (!createdRecord.success) {
+      const errorMsg = createdRecord.errors?.[0]?.message || 'Failed to create project in Salesforce';
+      const errorFields = createdRecord.errors?.map(e => e.fields || []).flat() || [];
+      console.error('Salesforce create error:', errorMsg, 'Fields:', errorFields);
+      
+      // Provide helpful error message
+      if (errorFields.length > 0) {
+        throw new Error(
+          `${errorMsg} (Fields: ${errorFields.join(', ')}). ` +
+          'Please verify that all required fields exist in Project__c and have correct values.'
+        );
+      } else {
+        throw new Error(errorMsg);
+      }
+    }
+    
+    console.log('Project created successfully in Project__c:', createdRecord.id);
+    console.log('Project Name:', cleanedData.Name);
+    
+    return {
+      success: true,
+      salesforceId: createdRecord.id,
+      objectType: objectType
+    };
+  } catch (createError) {
+    // Re-throw with more context if it's not already a helpful error
+    if (createError.message && (
+      createError.message.includes('Project__c') || 
+      createError.message.includes('does not exist') ||
+      createError.message.includes('INVALID_TYPE')
+    )) {
+      throw createError; // Already has helpful message
+    } else {
+      console.error('Error creating project in Project__c:', createError.message);
+      throw new Error(
+        `Failed to create project in Project__c: ${createError.message}. ` +
+        'Please verify that all required fields exist and have correct values.'
+      );
+    }
+  }
+}
+
+// Create project in Salesforce
+router.post('/create-project', authenticate, authorize('create_project', 'all'), asyncHandler(async (req, res) => {
+  try {
+    const result = await createProjectInSalesforce(req.body, req.user);
+    
+    // Return success response
+    res.json({
+      success: true,
+      message: 'Project created successfully in Salesforce',
+      salesforceId: result.salesforceId,
+      objectType: result.objectType,
+      projectData: {
+        id: result.salesforceId
+      }
+    });
+  } catch (error) {
+    console.error('Error creating project in Salesforce:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.errorCode,
+      statusCode: error.statusCode
+    });
+    
+    let errorMessage = 'Failed to create project in Salesforce. Please check your Salesforce configuration and try again.';
+    
+    if (error.message) {
+      if (error.message.includes('INVALID_LOGIN') || error.message.includes('authentication failure')) {
+        errorMessage = 'Salesforce authentication failed. Please check your Salesforce credentials in Settings.';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        errorMessage = 'Unauthorized access to Salesforce. Please verify your Salesforce credentials.';
+      } else if (error.message.includes('INVALID_FIELD') || error.message.includes('No such column')) {
+        errorMessage = 'Invalid field mapping. Some project fields may not exist in your Salesforce object. Please check your Salesforce object structure.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    res.status(400).json({
+      success: false,
+      error: errorMessage,
+      details: error.message
+    });
+  }
+}));
+
+// Test Salesforce project creation API
+router.post('/test-create-project', authenticate, authorize('create_project', 'all'), asyncHandler(async (req, res) => {
+  try {
+    // Get Salesforce settings
+    const settingsPath = getSettingsPath();
+    
+    if (!fs.existsSync(settingsPath)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Salesforce settings not configured. Please configure Salesforce settings first.' 
+      });
+    }
+
+    let encryptedSettings;
+    try {
+      encryptedSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    } catch (parseError) {
+      console.error('Error parsing settings file:', parseError);
+      return res.status(400).json({ 
+        success: false,
+        error: 'Error reading Salesforce settings. Please reconfigure your Salesforce settings.' 
+      });
+    }
+
+    // Decrypt credentials
+    const salesforceUrl = encryptedSettings.salesforceUrl || encryptedSettings.loginUrl || '';
+    const username = decrypt(encryptedSettings.username || '');
+    const password = decrypt(encryptedSettings.password || '');
+    const securityToken = decrypt(encryptedSettings.securityToken || '');
+
+    if (!salesforceUrl || !username || !password || !securityToken) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Salesforce credentials are incomplete. Please reconfigure your Salesforce settings.' 
+      });
+    }
+
+    // Get project data from request
+    const projectData = req.body;
+
+    // Normalize Salesforce URL
+    let normalizedUrl = String(salesforceUrl).trim();
+    normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+    normalizedUrl = normalizedUrl.replace(/\/services\/.*$/i, '');
+    
+    // Convert Lightning URLs to appropriate login URLs for jsforce
+    const urlLower = normalizedUrl.toLowerCase();
+    let loginUrlForConnection = normalizedUrl;
+    
+    if (urlLower.includes('lightning.force.com')) {
+      if (urlLower.includes('.sandbox.') || urlLower.includes('--staging') || urlLower.includes('--dev')) {
+        loginUrlForConnection = 'https://test.salesforce.com';
+      } else {
+        loginUrlForConnection = 'https://login.salesforce.com';
+      }
+    } else if (urlLower.includes('.my.salesforce.com')) {
+      loginUrlForConnection = 'https://login.salesforce.com';
+    }
+
+    // Create Salesforce connection
+    const conn = new jsforce.Connection({
+      loginUrl: loginUrlForConnection
+    });
+
+    // Login to Salesforce
+    const fullPassword = password + securityToken;
+    const userInfo = await conn.login(username, fullPassword);
+    console.log('Salesforce login successful for project creation, user ID:', userInfo.id);
+
+    // Map project data to Salesforce object fields
+    // Note: Adjust field names based on your Salesforce object structure
+    // This example assumes a custom object called "Project__c" or uses standard objects
+    // All fields from the form are mapped to Salesforce fields
+    const salesforceProjectData = {
+      // Basic Information Fields
+      // Name field is required in Salesforce - map projectName to Name field
+      Name: projectData.projectName || projectData.name || 'New Project',
+      Short_Project_Name__c: projectData.shortProjectName,
+      Contributor_Project_Name__c: projectData.contributorProjectName,
+      Auditor_Project__c: projectData.auditorProject || false,
+      Appen_Partner__c: projectData.appenPartner,
+      Job_Category__c: projectData.jobCategory,
+      Project_Short_Description__c: projectData.projectShortDescription,
+      Project_Long_Description__c: projectData.projectLongDescription,
+      Project_Type__c: projectData.projectType,
+      Project_Priority__c: projectData.projectPriority,
+      Project_ID_for_Reports__c: projectData.projectIdForReports,
+      Workday_Project_ID__c: projectData.workdayProjectId,
+      Account__c: projectData.account,
+      Program_Name__c: projectData.programName,
+      Hire_Start_Date__c: projectData.hireStartDate,
+      Predicted_Close_Date__c: projectData.predictedCloseDate,
+      Delivery_Tool_Org__c: projectData.deliveryToolOrg,
+      Delivery_Tool_Name__c: projectData.deliveryToolName,
+      Project_Page__c: projectData.projectPage,
+      Project_Status__c: projectData.projectStatus,
+      
+      // Contributor Active Status Fields
+      Payment_Setup_Required__c: projectData.paymentSetupRequired || false,
+      Manual_Activation_Required__c: projectData.manualActivationRequired || false,
+      Client_Tool_Account_Required__c: projectData.clientToolAccountRequired || false,
+      
+      // People Fields
+      Program_Manager__c: projectData.programManager,
+      Project_Manager__c: projectData.projectManager,
+      Quality_Lead__c: projectData.qualityLead,
+      Productivity_Lead__c: projectData.productivityLead,
+      Reporting_Lead__c: projectData.reportingLead,
+      Invoicing_Lead__c: projectData.invoicingLead,
+      Project_Support_Lead__c: projectData.projectSupportLead,
+      Cases_DC_Support_Team__c: projectData.casesDCSupportTeam || false,
+      Recruitment_Lead__c: projectData.recruitmentLead,
+      Qualification_Lead__c: projectData.qualificationLead,
+      Onboarding_Lead__c: projectData.onboardingLead,
+      
+      // Rates Fields
+      Project_Incentive__c: projectData.projectIncentive,
+      
+      // Funnel Totals Fields
+      Total_Applied__c: projectData.totalApplied,
+      Total_Qualified__c: projectData.totalQualified,
+      
+      // Funnel Stages Fields
+      Invited_Available_Contributors__c: projectData.invitedAvailableContributors,
+      Registered_Contributors__c: projectData.registeredContributors,
+      App_Received__c: projectData.appReceived,
+      Qualified_Contributors__c: projectData.qualifiedContributors,
+      Matched_Contributors__c: projectData.matchedContributors,
+      Active_Contributors__c: projectData.activeContributors,
+      AC_Account__c: projectData.acAccount,
+      Production_Contributors__c: projectData.productionContributors,
+      Applied_Contributors__c: projectData.appliedContributors,
+      Removed__c: projectData.removed,
+      
+      // Lever Requisition Actions Fields
+      Requisition_Action__c: projectData.requisitionAction,
+      
+      // Lever Requisition Fields
+      Lever_Req_Name__c: projectData.leverReqName,
+      Requisition_Status__c: projectData.requisitionStatus,
+      Lever_Req_Code__c: projectData.leverReqCode,
+      Lever_Time_to_Fill_Start__c: projectData.leverTimeToFillStart,
+      Lever_Crowd_Hiring_Manager_Email__c: projectData.leverCrowdHiringManagerEmail,
+      Lever_Time_to_Fill_End__c: projectData.leverTimeToFillEnd,
+      Lever_Crowd_Owner_Email__c: projectData.leverCrowdOwnerEmail,
+      Lever_Req_Description__c: projectData.leverReqDescription,
+      Lever_Compensation_Band__c: projectData.leverCompensationBand,
+      Lever_Location__c: projectData.leverLocation,
+      Lever_Department__c: projectData.leverDepartment,
+      Lever_Work_Type__c: projectData.leverWorkType,
+      Lever_SVP__c: projectData.leverSVP,
+      Lever_SVP2__c: projectData.leverSVP2,
+      
+      // Lever Admin Fields
+      Lever_Requisition_ID__c: projectData.leverRequisitionID,
+      Lever_Requisition_Create_Date__c: projectData.leverRequisitionCreateDate,
+      
+      // Payment Configurations Fields
+      Project_Payment_Method__c: projectData.projectPaymentMethod,
+      Require_PM_Approval_for_Productivity__c: projectData.requirePMApprovalForProductivity || false,
+      Release_System_Tracked_Data__c: projectData.releaseSystemTrackedData,
+      
+      // Activation Fields
+      Activate_Comms_Invited__c: projectData.activateCommsInvited || false,
+      Activate_Comms_Applied__c: projectData.activateCommsApplied || false,
+      Activate_Comms_Onboarding__c: projectData.activateCommsOnboarding || false,
+      Activate_Comms_Failed__c: projectData.activateCommsFailed || false
+    };
+    
+    // Remove undefined/null/empty string values to avoid Salesforce errors
+    // BUT always keep required fields (Name, Contributor_Project_Name__c, Project_Type__c)
+    // Also handle special cases like empty strings for dates
+    Object.keys(salesforceProjectData).forEach(key => {
+      const value = salesforceProjectData[key];
+      // Always keep Name field - it's required in Salesforce
+      if (key === 'Name') {
+        // Ensure Name always has a value
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          salesforceProjectData[key] = 'New Project';
+        }
+        return; // Don't delete Name field
+      }
+      
+      // Keep required fields even if empty (will set defaults below)
+      const requiredFields = ['Contributor_Project_Name__c', 'Project_Type__c'];
+      if (requiredFields.includes(key)) {
+        // If empty, we'll set a default below, but don't delete it yet
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          // Keep it but mark for default value
+          return;
+        }
+        return; // Don't delete required fields
+      }
+      
+      // For other fields, remove empty values
+      if (value === undefined || value === null || value === '' || 
+          (typeof value === 'string' && value.trim() === '')) {
+        delete salesforceProjectData[key];
+      }
+    });
+    
+    // Ensure Name field is always present and has a value
+    if (!salesforceProjectData.Name || salesforceProjectData.Name.trim() === '') {
+      salesforceProjectData.Name = projectData.projectName || projectData.name || 'New Project';
+    }
+    
+    // Ensure required fields have default values if empty
+    if (!salesforceProjectData.Contributor_Project_Name__c || salesforceProjectData.Contributor_Project_Name__c.trim() === '') {
+      salesforceProjectData.Contributor_Project_Name__c = salesforceProjectData.Name || 'New Project';
+    }
+    
+    if (!salesforceProjectData.Project_Type__c || salesforceProjectData.Project_Type__c.trim() === '') {
+      salesforceProjectData.Project_Type__c = 'General'; // Default project type
+    }
+
+    // Log the data being sent to Salesforce (without sensitive info)
+    console.log('Creating project in Salesforce with', Object.keys(salesforceProjectData).length, 'fields');
+    console.log('Salesforce object type: Project__c');
+    console.log('Project Name (mapped to Name field):', salesforceProjectData.Name);
+
+    // Check if Project__c object exists before attempting to create
+    let objectType = 'Project__c';
+    let projectObjectExists = false;
+    
+    try {
+      // Try to describe the object to check if it exists
+      const objectDescribe = await conn.sobject(objectType).describe();
+      projectObjectExists = true;
+      console.log(`Project__c object exists. Label: ${objectDescribe.label}, Fields: ${objectDescribe.fields.length}`);
+    } catch (describeError) {
+      // Object doesn't exist or user doesn't have access
+      const errorMessage = describeError.message || 'Unknown error';
+      if (errorMessage.includes('INVALID_TYPE') || errorMessage.includes('NOT_FOUND') || errorMessage.includes('No such column')) {
+        console.error('Project__c object does not exist in Salesforce');
+        throw new Error(
+          'Project__c custom object does not exist in your Salesforce instance. ' +
+          'Please create the Project__c custom object in Salesforce with the required fields. ' +
+          'See documentation for field mapping details.'
+        );
+      } else {
+        // Other error (permissions, etc.)
+        console.error('Error checking Project__c object:', errorMessage);
+        throw new Error(
+          `Cannot access Project__c object in Salesforce: ${errorMessage}. ` +
+          'Please verify that the Project__c object exists and you have permissions to create records.'
+        );
+      }
+    }
+
+    // Create project in Project__c (object exists and is accessible)
+    let createdRecord;
+    try {
+      // Get object metadata to validate field values
+      const objectDescribe = await conn.sobject(objectType).describe();
+      const fieldMap = {};
+      objectDescribe.fields.forEach(field => {
+        fieldMap[field.name] = field;
+      });
+      
+      // Remove fields with invalid picklist values and lookup fields with invalid IDs
+      // BUT always preserve required fields (Name, Contributor_Project_Name__c, Project_Type__c)
+      const cleanedData = { ...salesforceProjectData };
+      const requiredFields = ['Name', 'Contributor_Project_Name__c', 'Project_Type__c'];
+      
+      Object.keys(cleanedData).forEach(fieldName => {
+        // Always keep required fields - they're required in Salesforce
+        if (requiredFields.includes(fieldName)) {
+          // Ensure required fields have values
+          if (!cleanedData[fieldName] || (typeof cleanedData[fieldName] === 'string' && cleanedData[fieldName].trim() === '')) {
+            if (fieldName === 'Name') {
+              cleanedData[fieldName] = projectData.projectName || projectData.name || 'New Project';
+            } else if (fieldName === 'Contributor_Project_Name__c') {
+              cleanedData[fieldName] = projectData.contributorProjectName || projectData.projectName || projectData.name || 'New Project';
+            } else if (fieldName === 'Project_Type__c') {
+              cleanedData[fieldName] = projectData.projectType || 'General';
+            }
+          }
+          // Don't return here - we need to validate picklist values for required fields too
+        }
+        
+        const field = fieldMap[fieldName];
+        if (!field) {
+          // Field doesn't exist in Salesforce, but don't remove required fields
+          if (!requiredFields.includes(fieldName)) {
+            console.warn(`Removing non-existent field: ${fieldName}`);
+            delete cleanedData[fieldName];
+          }
+          return;
+        }
+        
+        // Only include fields that are createable and updateable (but keep required fields)
+        if (!field.createable || !field.updateable) {
+          if (!requiredFields.includes(fieldName)) {
+            console.warn(`Removing read-only field: ${fieldName} (createable: ${field.createable}, updateable: ${field.updateable})`);
+            delete cleanedData[fieldName];
+          }
+          return;
+        }
+        
+        // Handle picklist fields
+        if (field.type === 'picklist' && field.restrictedPicklist) {
+          const value = cleanedData[fieldName];
+          if (value && !field.picklistValues.some(pv => pv.value === value)) {
+            // If this is a required field, set a default valid value instead of removing
+            if (requiredFields.includes(fieldName)) {
+              // Find the first active picklist value as default
+              const defaultValue = field.picklistValues.find(pv => pv.active !== false)?.value || field.picklistValues[0]?.value;
+              if (defaultValue) {
+                console.warn(`Invalid picklist value for required field ${fieldName}: "${value}". Setting to default: "${defaultValue}"`);
+                cleanedData[fieldName] = defaultValue;
+              } else {
+                console.warn(`No valid picklist values found for required field ${fieldName}, keeping original value: ${value}`);
+              }
+            } else {
+              // For non-required fields, remove invalid values
+              console.warn(`Removing invalid picklist value for ${fieldName}: ${value}`);
+              delete cleanedData[fieldName];
+            }
+          }
+        }
+        
+        // Handle lookup/reference fields - they need Salesforce IDs, not emails
+        if (field.type === 'reference' || field.type === 'lookup') {
+          const value = cleanedData[fieldName];
+          // If it's not a valid Salesforce ID (15 or 18 characters, alphanumeric), remove it
+          if (value && !/^[a-zA-Z0-9]{15,18}$/.test(value)) {
+            console.warn(`Removing invalid lookup value for ${fieldName}: ${value} (expected Salesforce ID)`);
+            delete cleanedData[fieldName];
+          }
+        }
+        
+        // Handle field length restrictions
+        if (field.length && field.type === 'string') {
+          const value = cleanedData[fieldName];
+          if (value && typeof value === 'string' && value.length > field.length) {
+            console.warn(`Truncating ${fieldName} from ${value.length} to ${field.length} characters`);
+            cleanedData[fieldName] = value.substring(0, field.length);
+          }
+        }
+      });
+      
+      // Ensure required fields are always present and have values (final check)
+      if (!cleanedData.Name || cleanedData.Name.trim() === '') {
+        cleanedData.Name = projectData.projectName || projectData.name || 'New Project';
+        console.warn('Name field was empty, setting to default value:', cleanedData.Name);
+      }
+      
+      if (!cleanedData.Contributor_Project_Name__c || cleanedData.Contributor_Project_Name__c.trim() === '') {
+        cleanedData.Contributor_Project_Name__c = projectData.contributorProjectName || projectData.projectName || projectData.name || 'New Project';
+        console.warn('Contributor_Project_Name__c field was empty, setting to default value:', cleanedData.Contributor_Project_Name__c);
+      }
+      
+      if (!cleanedData.Project_Type__c || cleanedData.Project_Type__c.trim() === '') {
+        // Try to get a valid picklist value for Project_Type__c
+        const projectTypeField = fieldMap['Project_Type__c'];
+        if (projectTypeField && projectTypeField.picklistValues && projectTypeField.picklistValues.length > 0) {
+          const defaultValue = projectTypeField.picklistValues.find(pv => pv.active !== false)?.value || projectTypeField.picklistValues[0]?.value;
+          cleanedData.Project_Type__c = defaultValue || 'General';
+          console.warn('Project_Type__c field was empty, setting to default picklist value:', cleanedData.Project_Type__c);
+        } else {
+          cleanedData.Project_Type__c = 'General';
+          console.warn('Project_Type__c field was empty, setting to default value:', cleanedData.Project_Type__c);
+        }
+      }
+      
+      // Log final cleaned data summary
+      console.log(`Final cleaned data: ${Object.keys(cleanedData).length} fields (removed ${Object.keys(salesforceProjectData).length - Object.keys(cleanedData).length} invalid fields)`);
+      console.log('Required fields check:', {
+        Name: cleanedData.Name,
+        Contributor_Project_Name__c: cleanedData.Contributor_Project_Name__c,
+        Project_Type__c: cleanedData.Project_Type__c
+      });
+      
+      createdRecord = await conn.sobject(objectType).create(cleanedData);
+      
+      if (!createdRecord.success) {
+        const errorMsg = createdRecord.errors?.[0]?.message || 'Failed to create project in Salesforce';
+        const errorFields = createdRecord.errors?.map(e => e.fields || []).flat() || [];
+        console.error('Salesforce create error:', errorMsg, 'Fields:', errorFields);
+        
+        // Provide helpful error message
+        if (errorFields.length > 0) {
+          throw new Error(
+            `${errorMsg} (Fields: ${errorFields.join(', ')}). ` +
+            'Please verify that all required fields exist in Project__c and have correct values.'
+          );
+        } else {
+          throw new Error(errorMsg);
+        }
+      }
+      
+      console.log('Project created successfully in Project__c:', createdRecord.id);
+      console.log('Project Name:', cleanedData.Name);
+    } catch (createError) {
+      // Re-throw with more context if it's not already a helpful error
+      if (createError.message && (
+        createError.message.includes('Project__c') || 
+        createError.message.includes('does not exist') ||
+        createError.message.includes('INVALID_TYPE')
+      )) {
+        throw createError; // Already has helpful message
+      } else {
+        console.error('Error creating project in Project__c:', createError.message);
+        throw new Error(
+          `Failed to create project in Project__c: ${createError.message}. ` +
+          'Please verify that all required fields exist and have correct values.'
+        );
+      }
+    }
+
+    // Return success response
+    res.json({
+      success: true,
+      message: 'Project created successfully in Salesforce',
+      salesforceId: createdRecord.id,
+      objectType: objectType,
+      projectData: {
+        id: createdRecord.id,
+        ...salesforceProjectData
+      }
+    });
+
+  } catch (error) {
+    console.error('Error creating project in Salesforce:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.errorCode,
+      statusCode: error.statusCode
+    });
+    
+    let errorMessage = 'Failed to create project in Salesforce. Please check your Salesforce configuration and try again.';
+    
+    if (error.message) {
+      if (error.message.includes('INVALID_LOGIN') || error.message.includes('authentication failure')) {
+        errorMessage = 'Salesforce authentication failed. Please check your Salesforce credentials in Settings.';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        errorMessage = 'Unauthorized access to Salesforce. Please verify your Salesforce credentials.';
+      } else if (error.message.includes('INVALID_FIELD') || error.message.includes('No such column')) {
+        errorMessage = 'Invalid field mapping. Some project fields may not exist in your Salesforce object. Please check your Salesforce object structure.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    res.status(400).json({
+      success: false,
+      error: errorMessage,
+      details: error.message
+    });
+  }
+});
+
+// Test project creation in Salesforce (without actually creating)
+router.post('/test-project-creation', authenticate, authorize('create_project', 'all'), async (req, res) => {
+  try {
+    // Get Salesforce settings
+    const settingsPath = getSettingsPath();
+    
+    if (!fs.existsSync(settingsPath)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Salesforce settings not configured. Please configure Salesforce settings first.' 
+      });
+    }
+
+    let encryptedSettings;
+    try {
+      encryptedSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    } catch (parseError) {
+      console.error('Error parsing settings file:', parseError);
+      return res.status(400).json({ 
+        success: false,
+        error: 'Error reading Salesforce settings. Please reconfigure your Salesforce settings.' 
+      });
+    }
+
+    // Decrypt credentials
+    const salesforceUrl = encryptedSettings.salesforceUrl || encryptedSettings.loginUrl || '';
+    const username = decrypt(encryptedSettings.username || '');
+    const password = decrypt(encryptedSettings.password || '');
+    const securityToken = decrypt(encryptedSettings.securityToken || '');
+
+    if (!salesforceUrl || !username || !password || !securityToken) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Salesforce credentials are incomplete. Please reconfigure your Salesforce settings.' 
+      });
+    }
+
+    // Get sample project data from request (or use defaults)
+    const sampleProjectData = req.body || {
+      projectName: 'Test Project',
+      shortProjectName: 'Test',
+      contributorProjectName: 'Test Contributor',
+      appenPartner: 'Appen',
+      jobCategory: 'Data Collection',
+      projectShortDescription: 'Test project description',
+      projectLongDescription: 'This is a test project to validate Salesforce integration',
+      projectType: 'Data collection',
+      projectPriority: 50.0,
+      projectStatus: 'Draft'
+    };
+
+    // Normalize Salesforce URL
+    let normalizedUrl = String(salesforceUrl).trim();
+    normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+    normalizedUrl = normalizedUrl.replace(/\/services\/.*$/i, '');
+    
+    // Convert Lightning URLs to appropriate login URLs for jsforce
+    const urlLower = normalizedUrl.toLowerCase();
+    let loginUrlForConnection = normalizedUrl;
+    
+    if (urlLower.includes('lightning.force.com')) {
+      if (urlLower.includes('.sandbox.') || urlLower.includes('--staging') || urlLower.includes('--dev')) {
+        loginUrlForConnection = 'https://test.salesforce.com';
+      } else {
+        loginUrlForConnection = 'https://login.salesforce.com';
+      }
+    } else if (urlLower.includes('.my.salesforce.com')) {
+      loginUrlForConnection = 'https://login.salesforce.com';
+    }
+
+    // Create Salesforce connection
+    const conn = new jsforce.Connection({
+      loginUrl: loginUrlForConnection
+    });
+
+    // Login to Salesforce
+    const fullPassword = password + securityToken;
+    const userInfo = await conn.login(username, fullPassword);
+    console.log('Salesforce login successful for project creation test, user ID:', userInfo.id);
+
+    // Map project data to Salesforce object fields
+    const salesforceProjectData = {
+      Name: sampleProjectData.projectName || sampleProjectData.name || 'Test Project',
+      Short_Project_Name__c: sampleProjectData.shortProjectName,
+      Contributor_Project_Name__c: sampleProjectData.contributorProjectName,
+      Appen_Partner__c: sampleProjectData.appenPartner,
+      Job_Category__c: sampleProjectData.jobCategory,
+      Project_Short_Description__c: sampleProjectData.projectShortDescription,
+      Project_Long_Description__c: sampleProjectData.projectLongDescription,
+      Project_Type__c: sampleProjectData.projectType,
+      Project_Priority__c: sampleProjectData.projectPriority,
+      Workday_Project_ID__c: sampleProjectData.workdayProjectId,
+      Account__c: sampleProjectData.account,
+      Program_Name__c: sampleProjectData.programName,
+      Hire_Start_Date__c: sampleProjectData.hireStartDate,
+      Predicted_Close_Date__c: sampleProjectData.predictedCloseDate,
+      Delivery_Tool_Org__c: sampleProjectData.deliveryToolOrg,
+      Delivery_Tool_Name__c: sampleProjectData.deliveryToolName,
+      Project_Page__c: sampleProjectData.projectPage,
+      Project_Status__c: sampleProjectData.projectStatus,
+      Payment_Setup_Required__c: sampleProjectData.paymentSetupRequired || false,
+      Manual_Activation_Required__c: sampleProjectData.manualActivationRequired || false,
+      Client_Tool_Account_Required__c: sampleProjectData.clientToolAccountRequired || false,
+      Project_Payment_Method__c: sampleProjectData.projectPaymentMethod,
+      Require_PM_Approval_for_Productivity__c: sampleProjectData.requirePMApprovalForProductivity || false,
+      Release_System_Tracked_Data__c: sampleProjectData.releaseSystemTrackedData,
+      Activate_Comms_Invited__c: sampleProjectData.activateCommsInvited || false,
+      Activate_Comms_Applied__c: sampleProjectData.activateCommsApplied || false,
+      Activate_Comms_Onboarding__c: sampleProjectData.activateCommsOnboarding || false,
+      Activate_Comms_Failed__c: sampleProjectData.activateCommsFailed || false
+    };
+
+    // Test object existence and field validation without creating
+    let objectType = 'Project__c';
+    let objectExists = false;
+    let fieldsValid = false;
+    let validationErrors = [];
+    let availableFields = [];
+
+    try {
+      // Check if custom object exists
+      const describeResult = await conn.sobject(objectType).describe();
+      objectExists = true;
+      availableFields = describeResult.fields.map(f => f.name);
+      
+      // Validate fields
+      const requiredFields = Object.keys(salesforceProjectData).filter(key => salesforceProjectData[key] !== null && salesforceProjectData[key] !== undefined);
+      const invalidFields = requiredFields.filter(field => !availableFields.includes(field));
+      
+      if (invalidFields.length > 0) {
+        validationErrors.push(`Invalid fields: ${invalidFields.join(', ')}`);
+        fieldsValid = false;
+      } else {
+        fieldsValid = true;
+      }
+    } catch (describeError) {
+      // Custom object doesn't exist, try Opportunity as fallback
+      console.log('Custom object does not exist, checking Opportunity:', describeError.message);
+      objectType = 'Opportunity';
+      
+      try {
+        const oppDescribe = await conn.sobject('Opportunity').describe();
+        objectExists = true;
+        availableFields = oppDescribe.fields.map(f => f.name);
+        
+        // Check if basic Opportunity fields exist
+        const oppFields = ['Name', 'Description', 'StageName', 'CloseDate'];
+        const missingFields = oppFields.filter(field => !availableFields.includes(field));
+        
+        if (missingFields.length > 0) {
+          validationErrors.push(`Missing Opportunity fields: ${missingFields.join(', ')}`);
+          fieldsValid = false;
+        } else {
+          fieldsValid = true;
+        }
+      } catch (oppError) {
+        objectExists = false;
+        validationErrors.push(`Neither Project__c nor Opportunity object is accessible: ${oppError.message}`);
+      }
+    }
+
+    // Return test results
+    res.json({
+      success: true,
+      message: 'Project creation API test completed',
+      testResults: {
+        connectionSuccessful: true,
+        userInfo: {
+          Id: userInfo.id,
+          Name: userInfo.name || 'Unknown',
+          Email: userInfo.email || username
+        },
+        objectType: objectType,
+        objectExists: objectExists,
+        fieldsValid: fieldsValid,
+        availableFields: availableFields.slice(0, 20), // Return first 20 fields
+        validationErrors: validationErrors,
+        sampleData: salesforceProjectData
+      }
+    });
+
+  } catch (error) {
+    console.error('Error testing project creation in Salesforce:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.errorCode,
+      statusCode: error.statusCode
+    });
+    
+    let errorMessage = 'Failed to test project creation in Salesforce. Please check your Salesforce configuration and try again.';
+    
+    if (error.message) {
+      if (error.message.includes('INVALID_LOGIN') || error.message.includes('authentication failure')) {
+        errorMessage = 'Salesforce authentication failed. Please check your Salesforce credentials in Settings.';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        errorMessage = 'Unauthorized access to Salesforce. Please verify your Salesforce credentials.';
+      } else if (error.message.includes('INVALID_FIELD') || error.message.includes('No such column')) {
+        errorMessage = 'Invalid field mapping. Some project fields may not exist in your Salesforce object. Please check your Salesforce object structure.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    res.status(400).json({
+      success: false,
+      error: errorMessage,
+      details: error.message
+    });
+  }
+});
+
+// Create a test project in Salesforce with dummy data
+router.post('/create-test-project', authenticate, authorize('create_project', 'all'), asyncHandler(async (req, res) => {
+  try {
+    // Get Salesforce settings
+    const settingsPath = getSettingsPath();
+    
+    if (!fs.existsSync(settingsPath)) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Salesforce settings not configured. Please configure Salesforce settings first.' 
+      });
+    }
+
+    let encryptedSettings;
+    try {
+      encryptedSettings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    } catch (parseError) {
+      console.error('Error parsing settings file:', parseError);
+      return res.status(400).json({ 
+        success: false,
+        error: 'Error reading Salesforce settings. Please reconfigure your Salesforce settings.' 
+      });
+    }
+
+    // Decrypt credentials
+    const salesforceUrl = encryptedSettings.salesforceUrl || encryptedSettings.loginUrl || '';
+    const username = decrypt(encryptedSettings.username || '');
+    const password = decrypt(encryptedSettings.password || '');
+    const securityToken = decrypt(encryptedSettings.securityToken || '');
+
+    if (!salesforceUrl || !username || !password || !securityToken) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Salesforce credentials are incomplete. Please reconfigure your Salesforce settings.' 
+      });
+    }
+
+    // Normalize Salesforce URL
+    let normalizedUrl = String(salesforceUrl).trim();
+    normalizedUrl = normalizedUrl.replace(/\/+$/, '');
+    normalizedUrl = normalizedUrl.replace(/\/services\/.*$/i, '');
+    
+    // Convert Lightning URLs to appropriate login URLs for jsforce
+    const urlLower = normalizedUrl.toLowerCase();
+    let loginUrlForConnection = normalizedUrl;
+    
+    if (urlLower.includes('lightning.force.com')) {
+      // Extract sandbox name if present
+      if (urlLower.includes('sandbox')) {
+        loginUrlForConnection = 'https://test.salesforce.com';
+      } else {
+        loginUrlForConnection = 'https://login.salesforce.com';
+      }
+    } else if (urlLower.includes('test.salesforce.com') || urlLower.includes('test--')) {
+      loginUrlForConnection = 'https://test.salesforce.com';
+    } else if (urlLower.includes('login.salesforce.com') || urlLower.includes('--')) {
+      loginUrlForConnection = 'https://login.salesforce.com';
+    }
+
+    // Connect to Salesforce
+    const jsforce = require('jsforce');
+    const conn = new jsforce.Connection({
+      loginUrl: loginUrlForConnection
+    });
+
+    console.log('Connecting to Salesforce for test project creation...');
+    await conn.login(username, password + securityToken);
+    console.log('Connected to Salesforce successfully');
+
+      // Create dummy test project data
+      const testProjectData = {
+        Name: `Test Project ${Date.now()}`,
+      Short_Project_Name__c: 'Test',
+      Contributor_Project_Name__c: 'Test Contributor',
+      Auditor_Project__c: false,
+      Appen_Partner__c: 'Appen',
+      Job_Category__c: 'Data Collection',
+      Project_Short_Description__c: 'This is a test project created for testing Salesforce integration',
+      Project_Long_Description__c: 'This is a test project created for testing Salesforce integration. It contains dummy data to verify that the Salesforce API is working correctly.',
+      Project_Type__c: 'Data collection',
+      Project_Priority__c: 50.0,
+      Project_Status__c: 'Draft',
+      Account__c: 'Test Account',
+      Program_Name__c: 'Test Program',
+      Hire_Start_Date__c: new Date().toISOString().split('T')[0],
+      Predicted_Close_Date__c: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      Delivery_Tool_Org__c: 'Appen',
+      Delivery_Tool_Name__c: 'Test Tool',
+      Project_Page__c: 'https://test.example.com',
+      Payment_Setup_Required__c: true,
+      Manual_Activation_Required__c: false,
+      Client_Tool_Account_Required__c: false,
+      Project_Manager__c: 'test@example.com',
+      Project_Incentive__c: '0.000',
+      Total_Applied__c: 0,
+      Total_Qualified__c: 0,
+      Project_Payment_Method__c: 'Hourly',
+      Require_PM_Approval_for_Productivity__c: false,
+      Release_System_Tracked_Data__c: 'Yes',
+      Activate_Comms_Invited__c: false,
+      Activate_Comms_Applied__c: false,
+      Activate_Comms_Onboarding__c: false,
+      Activate_Comms_Failed__c: false
+    };
+
+    // Remove undefined/null/empty string values (but keep Name field)
+    Object.keys(testProjectData).forEach(key => {
+      const value = testProjectData[key];
+      // Always keep Name field - it's required in Salesforce
+      if (key === 'Name') {
+        // Ensure Name always has a value
+        if (!value || (typeof value === 'string' && value.trim() === '')) {
+          testProjectData[key] = 'Test Project';
+        }
+        return; // Don't delete Name field
+      }
+      
+      // For other fields, remove empty values
+      if (value === undefined || value === null || value === '' || 
+          (typeof value === 'string' && value.trim() === '')) {
+        delete testProjectData[key];
+      }
+    });
+    
+    // Ensure Name field is always present and has a value
+    if (!testProjectData.Name || testProjectData.Name.trim() === '') {
+      testProjectData.Name = `Test Project ${Date.now()}`;
+    }
+
+    // Check if Project__c object exists before attempting to create
+    let objectType = 'Project__c';
+    
+    try {
+      // Try to describe the object to check if it exists
+      const objectDescribe = await conn.sobject(objectType).describe();
+      console.log(`Project__c object exists. Label: ${objectDescribe.label}, Fields: ${objectDescribe.fields.length}`);
+      
+      // Get object metadata to validate field values (same validation as main create endpoint)
+      const fieldMap = {};
+      objectDescribe.fields.forEach(field => {
+        fieldMap[field.name] = field;
+      });
+      
+      // Remove fields with invalid picklist values and lookup fields with invalid IDs
+      // BUT always preserve the Name field as it's required in Salesforce
+      const cleanedData = { ...testProjectData };
+      Object.keys(cleanedData).forEach(fieldName => {
+        // Always keep Name field - it's required in Salesforce
+        if (fieldName === 'Name') {
+          return; // Don't validate or remove Name field
+        }
+        
+        const field = fieldMap[fieldName];
+        if (!field) {
+          // Field doesn't exist in Salesforce, remove it
+          console.warn(`Removing non-existent field: ${fieldName}`);
+          delete cleanedData[fieldName];
+          return;
+        }
+        
+        // Only include fields that are createable and updateable
+        if (!field.createable || !field.updateable) {
+          console.warn(`Removing read-only field: ${fieldName} (createable: ${field.createable}, updateable: ${field.updateable})`);
+          delete cleanedData[fieldName];
+          return;
+        }
+        
+        // Handle picklist fields
+        if (field.type === 'picklist' && field.restrictedPicklist) {
+          const value = cleanedData[fieldName];
+          if (value && !field.picklistValues.some(pv => pv.value === value)) {
+            console.warn(`Removing invalid picklist value for ${fieldName}: ${value}`);
+            delete cleanedData[fieldName];
+          }
+        }
+        
+        // Handle lookup/reference fields - they need Salesforce IDs, not emails
+        if (field.type === 'reference' || field.type === 'lookup') {
+          const value = cleanedData[fieldName];
+          // If it's not a valid Salesforce ID (15 or 18 characters, alphanumeric), remove it
+          if (value && !/^[a-zA-Z0-9]{15,18}$/.test(value)) {
+            console.warn(`Removing invalid lookup value for ${fieldName}: ${value} (expected Salesforce ID)`);
+            delete cleanedData[fieldName];
+          }
+        }
+        
+        // Handle field length restrictions
+        if (field.length && field.type === 'string') {
+          const value = cleanedData[fieldName];
+          if (value && typeof value === 'string' && value.length > field.length) {
+            console.warn(`Truncating ${fieldName} from ${value.length} to ${field.length} characters`);
+            cleanedData[fieldName] = value.substring(0, field.length);
+          }
+        }
+      });
+      
+      // Ensure Name field is always present and has a value (final check)
+      if (!cleanedData.Name || cleanedData.Name.trim() === '') {
+        cleanedData.Name = `Test Project ${Date.now()}`;
+        console.warn('Name field was empty, setting to default value:', cleanedData.Name);
+      }
+      
+      // Log final cleaned data summary
+      console.log(`Final cleaned data: ${Object.keys(cleanedData).length} fields (removed ${Object.keys(testProjectData).length - Object.keys(cleanedData).length} invalid fields)`);
+      
+      // Use cleaned data instead of testProjectData
+      testProjectData = cleanedData;
+    } catch (describeError) {
+      // Object doesn't exist or user doesn't have access
+      const errorMessage = describeError.message || 'Unknown error';
+      if (errorMessage.includes('INVALID_TYPE') || errorMessage.includes('NOT_FOUND') || errorMessage.includes('No such column')) {
+        console.error('Project__c object does not exist in Salesforce');
+        throw new Error(
+          'Project__c custom object does not exist in your Salesforce instance. ' +
+          'Please create the Project__c custom object in Salesforce with the required fields. ' +
+          'See documentation for field mapping details.'
+        );
+      } else {
+        // Other error (permissions, etc.)
+        console.error('Error checking Project__c object:', errorMessage);
+        throw new Error(
+          `Cannot access Project__c object in Salesforce: ${errorMessage}. ` +
+          'Please verify that the Project__c object exists and you have permissions to create records.'
+        );
+      }
+    }
+
+    // Create test project in Project__c (object exists and is accessible)
+    let createdRecord;
+    try {
+      console.log('Attempting to create test project in Project__c...');
+      createdRecord = await conn.sobject(objectType).create(testProjectData);
+      
+      if (!createdRecord.success) {
+        const errorMsg = createdRecord.errors?.[0]?.message || 'Failed to create test project in Salesforce';
+        const errorFields = createdRecord.errors?.map(e => e.fields || []).flat() || [];
+        console.error('Project__c create error:', errorMsg, 'Fields:', errorFields);
+        
+        // Provide helpful error message
+        if (errorFields.length > 0) {
+          throw new Error(
+            `${errorMsg} (Fields: ${errorFields.join(', ')}). ` +
+            'Please verify that all required fields exist in Project__c and have correct data types.'
+          );
+        } else {
+          throw new Error(errorMsg);
+        }
+      }
+      
+      console.log('Test project created successfully in Project__c:', createdRecord.id);
+    } catch (createError) {
+      // Re-throw with more context if it's not already a helpful error
+      if (createError.message && (
+        createError.message.includes('Project__c') || 
+        createError.message.includes('does not exist') ||
+        createError.message.includes('INVALID_TYPE')
+      )) {
+        throw createError; // Already has helpful message
+      } else {
+        console.error('Error creating test project in Project__c:', createError.message);
+        throw new Error(
+          `Failed to create test project in Project__c: ${createError.message}. ` +
+          'Please verify that all required fields exist and have correct values.'
+        );
+      }
+    }
+
+    // Return success response
+    res.json({
+      success: true,
+      message: 'Test project created successfully in Salesforce',
+      salesforceId: createdRecord.id,
+      objectType: objectType,
+      projectData: testProjectData
+    });
+
+  } catch (error) {
+    console.error('Error creating test project in Salesforce:', error);
+    console.error('Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.errorCode,
+      statusCode: error.statusCode
+    });
+    
+    let errorMessage = 'Failed to create test project in Salesforce. Please check your Salesforce configuration and try again.';
+    
+    if (error.message) {
+      if (error.message.includes('INVALID_LOGIN') || error.message.includes('authentication failure')) {
+        errorMessage = 'Salesforce authentication failed. Please check your Salesforce credentials in Settings.';
+      } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+        errorMessage = 'Unauthorized access to Salesforce. Please verify your Salesforce credentials.';
+      } else if (error.message.includes('INVALID_FIELD') || error.message.includes('No such column')) {
+        errorMessage = 'Invalid field mapping. Some project fields may not exist in your Salesforce object. Please check your Salesforce object structure.';
+      } else {
+        errorMessage = error.message;
+      }
+    }
+    
+    res.status(400).json({
+      success: false,
+      error: errorMessage,
+      details: error.message
+    });
+  }
+}));
+
+module.exports = router;
+module.exports.createProjectInSalesforce = createProjectInSalesforce;
+

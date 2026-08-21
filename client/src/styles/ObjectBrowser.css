@@ -1,0 +1,101 @@
+/* Object Browser - Scoped Styles */
+
+.object-browser {
+  padding: 8px;
+  overflow: visible;
+  box-sizing: border-box;
+}
+
+.object-selector {
+  margin-bottom: 8px;
+}
+
+.object-select-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Poppins', sans-serif;
+  background: #fff;
+  cursor: pointer;
+}
+
+.object-select-input:focus {
+  outline: none;
+  border-color: #08979C;
+  box-shadow: 0 0 0 2px rgba(8, 151, 156, 0.1);
+}
+
+.fields-list {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.field-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  margin-bottom: 3px;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  background: #fff;
+  cursor: grab;
+  transition: all 0.2s;
+  font-size: 11px;
+}
+
+.field-item:hover {
+  background: #f9fafb;
+  border-color: #08979C;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+
+.field-item:active {
+  cursor: grabbing;
+}
+
+.drag-handle {
+  color: #6b7280;
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+}
+
+.field-label {
+  flex: 1;
+  color: #002329;
+  font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.field-name {
+  color: #6b7280;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.fields-loading,
+.fields-empty {
+  padding: 12px;
+  text-align: center;
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.multi-object-hint {
+  margin-top: 6px;
+  padding: 6px 8px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 3px;
+  font-size: 10px;
+  color: #1e40af;
+  font-family: 'Poppins', sans-serif;
+  line-height: 1.4;
+}
+

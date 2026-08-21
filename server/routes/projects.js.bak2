@@ -1,0 +1,603 @@
+const express = require('express');
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const router = express.Router();
+const { authenticate, authorize } = require('../middleware/auth');
+
+// Async error wrapper - catches errors from async route handlers
+const asyncHandler = (fn) => {
+  return (req, res, next) => {
+    Promise.resolve(fn(req, res, next)).catch(next);
+  };
+};
+
+// Helper function to safely serialize objects to JSON
+const safeStringify = (obj) => {
+  const seen = new WeakSet();
+  return JSON.stringify(obj, (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return '[Circular]';
+      }
+      seen.add(value);
+    }
+    if (typeof value === 'function') {
+      return undefined;
+    }
+    if (value === undefined) {
+      return undefined;
+    }
+    return value;
+  });
+};
+
+// Get projects file path
+const getProjectsPath = () => {
+  const dataDir = path.join(__dirname, '../data');
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  return path.join(dataDir, 'projects.json');
+};
+
+// Load projects from file
+const loadProjects = () => {
+  try {
+    const projectsPath = getProjectsPath();
+    if (fs.existsSync(projectsPath)) {
+      const fileContent = fs.readFileSync(projectsPath, 'utf8');
+      const projects = JSON.parse(fileContent);
+      console.log(`Loaded ${projects.length} projects from persistent storage`);
+      return projects;
+    }
+  } catch (error) {
+    console.error('Error loading projects from file:', error);
+  }
+  return [];
+};
+
+// Save projects to file
+const saveProjects = (projectsArray) => {
+  try {
+    const projectsPath = getProjectsPath();
+    
+    // Clean the data to avoid circular references and ensure valid JSON
+    const cleanedProjects = projectsArray.map(project => {
+      const cleaned = {};
+      // Only copy serializable properties
+      Object.keys(project).forEach(key => {
+        const value = project[key];
+        // Skip functions
+        if (typeof value === 'function') {
+          return;
+        }
+        // Skip undefined
+        if (value === undefined) {
+          return;
+        }
+        // Skip circular references (check if it's an object that might be circular)
+        if (typeof value === 'object' && value !== null) {
+          try {
+            // Try to serialize to check for circular references
+            JSON.stringify(value);
+            cleaned[key] = value;
+          } catch (e) {
+            // If circular reference, skip it
+            console.warn(`Skipping circular reference in field: ${key}`);
+          }
+        } else {
+          // Primitive values are safe
+          cleaned[key] = value;
+        }
+      });
+      return cleaned;
+    });
+    
+    // Validate JSON before writing
+    const jsonData = JSON.stringify(cleanedProjects, null, 2);
+    JSON.parse(jsonData); // Validate it's valid JSON
+    
+    // Write to file atomically
+    const tempPath = projectsPath + '.tmp';
+    fs.writeFileSync(tempPath, jsonData, 'utf8');
+    fs.renameSync(tempPath, projectsPath);
+    
+    console.log(`Saved ${projectsArray.length} projects to persistent storage`);
+  } catch (error) {
+    console.error('Error saving projects to file:', error);
+    console.error('Error details:', {
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    throw error;
+  }
+};
+
+// Initialize projects array from persistent storage
+let projects = loadProjects();
+
+// Get dashboard statistics
+router.get('/stats', authenticate, asyncHandler(async (req, res) => {
+  try {
+    // Ensure projects is an array
+    if (!Array.isArray(projects)) {
+      console.error('Projects is not an array:', typeof projects);
+      return res.json({
+        totalProjects: 0,
+        activeProjects: 0,
+        teamMembers: 0,
+        pendingTasks: 0
+      });
+    }
+
+    const totalProjects = projects.length;
+    const activeProjects = projects.filter(p => {
+      try {
+        const status = p?.status?.toLowerCase() || 'draft';
+        return status !== 'draft' && status !== 'completed' && status !== 'closed';
+      } catch (error) {
+        console.warn('Error filtering active projects:', error);
+        return false;
+      }
+    }).length;
+    
+    // Count unique team members across all projects
+    const allTeamMembers = new Set();
+    projects.forEach(project => {
+      try {
+        if (project.projectTeam && Array.isArray(project.projectTeam)) {
+          project.projectTeam.forEach(member => {
+            if (member && member.email) {
+              allTeamMembers.add(member.email.toLowerCase());
+            }
+          });
+        }
+        if (project.people && Array.isArray(project.people)) {
+          project.people.forEach(person => {
+            if (person && person.email) {
+              allTeamMembers.add(person.email.toLowerCase());
+            }
+          });
+        }
+      } catch (error) {
+        console.warn('Error processing team members for project:', project.id, error);
+      }
+    });
+    const teamMembers = allTeamMembers.size;
+    
+    // Count pending tasks (projects with status 'draft' or 'pending')
+    const pendingTasks = projects.filter(p => {
+      try {
+        const status = p?.status?.toLowerCase() || 'draft';
+        return status === 'draft' || status === 'pending';
+      } catch (error) {
+        console.warn('Error filtering pending tasks:', error);
+        return false;
+      }
+    }).length;
+
+    res.json({
+      totalProjects,
+      activeProjects,
+      teamMembers,
+      pendingTasks
+    });
+  } catch (error) {
+    console.error('Error fetching stats:', error);
+    // Return default stats on error instead of throwing
+    res.json({
+      totalProjects: 0,
+      activeProjects: 0,
+      teamMembers: 0,
+      pendingTasks: 0
+    });
+  }
+}));
+
+// Get all projects
+router.get('/', authenticate, (req, res) => {
+  res.json(projects);
+});
+
+// Get project by ID
+router.get('/:id', authenticate, (req, res) => {
+  const project = projects.find(p => p.id === req.params.id);
+  if (!project) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+  res.json(project);
+});
+
+// Check sync status for a project
+router.get('/:id/sync-status', authenticate, (req, res) => {
+  const project = projects.find(p => p.id === req.params.id);
+  if (!project) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+  
+  res.json({
+    id: project.id,
+    projectName: project.projectName || project.name,
+    salesforceSyncStatus: project.salesforceSyncStatus || 'pending',
+    salesforceId: project.salesforceId || null,
+    salesforceObjectType: project.salesforceObjectType || null,
+    salesforceSyncedAt: project.salesforceSyncedAt || null,
+    salesforceSyncError: project.salesforceSyncError || null,
+    createdAt: project.createdAt,
+    updatedAt: project.updatedAt
+  });
+});
+
+// Retry sync for a pending or failed project
+router.post('/:id/retry-sync', authenticate, authorize('create_project', 'all'), asyncHandler(async (req, res) => {
+  const project = projects.find(p => p.id === req.params.id);
+  if (!project) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  // Check if Salesforce settings are configured
+  const fs = require('fs');
+  const path = require('path');
+  const settingsPath = path.join(__dirname, '../data/salesforce-settings.json');
+  
+  if (!fs.existsSync(settingsPath)) {
+    return res.status(400).json({ 
+      error: 'Salesforce settings not configured. Please configure Salesforce settings first.' 
+    });
+  }
+
+  // Mark as pending and trigger sync
+  const projectIndex = projects.findIndex(p => p.id === req.params.id);
+  if (projectIndex !== -1) {
+    projects[projectIndex].salesforceSyncStatus = 'pending';
+    projects[projectIndex].salesforceSyncError = null;
+    saveProjects(projects);
+  }
+
+  // Prepare project data for sync (exclude internal fields)
+  const projectDataForSync = { ...project };
+  delete projectDataForSync.id;
+  delete projectDataForSync.createdAt;
+  delete projectDataForSync.createdBy;
+  delete projectDataForSync.updatedAt;
+  delete projectDataForSync.updatedBy;
+  delete projectDataForSync.salesforceId;
+  delete projectDataForSync.salesforceSyncStatus;
+  delete projectDataForSync.salesforceObjectType;
+  delete projectDataForSync.salesforceSyncedAt;
+  delete projectDataForSync.salesforceSyncError;
+  
+  // Capture request context before background task
+  const axios = require('axios');
+  const authToken = req.headers.authorization;
+  const baseUrl = `${req.protocol}://${req.get('host')}`;
+  const salesforceUrlForRetry = `${baseUrl}/api/salesforce/create-project`;
+  const projectIdForRetry = req.params.id;
+  
+  // Run sync directly (synchronous) - wait for completion before responding
+  try {
+    // Ensure required fields are present before syncing
+    if (!projectDataForSync.contributorProjectName || projectDataForSync.contributorProjectName.trim() === '') {
+      projectDataForSync.contributorProjectName = projectDataForSync.projectName || projectDataForSync.name || 'New Project';
+    }
+    // Note: projectType will be validated and corrected by the Salesforce endpoint
+    // if it's an invalid picklist value, it will be set to a valid default
+    
+    console.log(`[Retry Sync] Attempting to sync project ${projectIdForRetry} to Salesforce`);
+    console.log(`[Retry Sync] Project data keys: ${Object.keys(projectDataForSync).length}`);
+    console.log(`[Retry Sync] Project Type: ${projectDataForSync.projectType}`);
+    console.log(`[Retry Sync] Contributor Project Name: ${projectDataForSync.contributorProjectName}`);
+    
+    // Call Salesforce function directly (no HTTP call)
+    const salesforceModule = require('./salesforce');
+    const createProjectInSalesforce = salesforceModule.createProjectInSalesforce;
+    
+    const salesforceResult = await createProjectInSalesforce(projectDataForSync, req.user);
+    
+    console.log(`[Retry Sync] Salesforce response received for project: ${projectIdForRetry}`);
+    console.log(`[Retry Sync] Response success: ${salesforceResult.success}`);
+    console.log(`[Retry Sync] Salesforce ID: ${salesforceResult.salesforceId}`);
+
+    if (salesforceResult && salesforceResult.success) {
+      console.log(`[Retry Sync] ✅ Sync successful for project: ${projectIdForRetry}`);
+      console.log(`[Retry Sync] Salesforce ID: ${salesforceResult.salesforceId}`);
+      const projectIndex = projects.findIndex(p => p.id === projectIdForRetry);
+      if (projectIndex !== -1) {
+        projects[projectIndex].salesforceId = salesforceResult.salesforceId;
+        projects[projectIndex].salesforceSyncStatus = 'synced';
+        projects[projectIndex].salesforceObjectType = salesforceResult.objectType;
+        projects[projectIndex].salesforceSyncedAt = new Date().toISOString();
+        projects[projectIndex].salesforceSyncError = null;
+        saveProjects(projects);
+        console.log(`[Retry Sync] ✅ Project ${projectIdForRetry} status updated to 'synced'`);
+      } else {
+        console.error(`[Retry Sync] ❌ Project ${projectIdForRetry} not found in projects array`);
+      }
+      
+      res.json({ 
+        message: 'Sync completed successfully.',
+        projectId: req.params.id,
+        salesforceId: salesforceResult.salesforceId,
+        salesforceSyncStatus: 'synced'
+      });
+    } else {
+      console.error(`[Retry Sync] ❌ Sync failed for project: ${projectIdForRetry}`);
+      const projectIndex = projects.findIndex(p => p.id === projectIdForRetry);
+      if (projectIndex !== -1) {
+        projects[projectIndex].salesforceSyncStatus = 'failed';
+        projects[projectIndex].salesforceSyncError = 'Salesforce sync returned success=false';
+        saveProjects(projects);
+        console.log(`[Retry Sync] ✅ Project ${projectIdForRetry} status updated to 'failed'`);
+      }
+      
+      res.status(400).json({ 
+        message: 'Sync failed.',
+        projectId: req.params.id,
+        error: 'Salesforce sync returned success=false',
+        salesforceSyncStatus: 'failed'
+      });
+    }
+  } catch (error) {
+    console.error(`[Retry Sync] ❌ Error syncing project ${projectIdForRetry}:`, error.message);
+    console.error(`[Retry Sync] Error details:`, error.response?.data || error.message);
+    const projectIndex = projects.findIndex(p => p.id === projectIdForRetry);
+    if (projectIndex !== -1) {
+      projects[projectIndex].salesforceSyncStatus = 'failed';
+      projects[projectIndex].salesforceSyncError = error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown Salesforce error';
+      saveProjects(projects);
+      console.log(`[Retry Sync] ✅ Project ${projectIdForRetry} status updated to 'failed'`);
+    }
+    
+    res.status(500).json({ 
+      message: 'Sync error occurred.',
+      projectId: req.params.id,
+      error: error.response?.data?.error || error.response?.data?.message || error.message || 'Unknown Salesforce error',
+      salesforceSyncStatus: 'failed'
+    });
+  }
+}));
+
+// Create project (Phase 2 - with Salesforce integration)
+router.post('/', authenticate, authorize('create_project', 'all'), asyncHandler(async (req, res) => {
+  let newProject = null;
+  
+  try {
+    console.log('=== CREATE PROJECT REQUEST START ===');
+    console.log('Request body keys:', Object.keys(req.body || {}));
+    console.log('Request body size:', JSON.stringify(req.body || {}).length);
+    
+    const projectData = req.body;
+    
+    // Validate project data
+    if (!projectData || typeof projectData !== 'object') {
+      throw new Error('Invalid project data');
+    }
+    
+    // Clean the project data to avoid issues
+    const cleanedProjectData = { ...projectData };
+    // Remove any functions or circular references
+    Object.keys(cleanedProjectData).forEach(key => {
+      if (typeof cleanedProjectData[key] === 'function') {
+        delete cleanedProjectData[key];
+      }
+    });
+    
+    // First, store locally
+    newProject = {
+      id: `PROJ-${Date.now()}`,
+      ...cleanedProjectData,
+      createdAt: new Date().toISOString(),
+      createdBy: req.user.email,
+      status: 'draft',
+      salesforceId: null,
+      salesforceSyncStatus: 'pending'
+    };
+
+    projects.push(newProject);
+    
+    try {
+      console.log('Attempting to save project to file...');
+      saveProjects(projects); // Save to persistent storage
+      console.log('Project saved successfully to file');
+    } catch (saveError) {
+      console.error('Error saving project to file:', saveError);
+      console.error('Save error stack:', saveError.stack);
+      // If save fails, remove from array and throw error
+      projects.pop();
+      throw new Error(`Failed to save project: ${saveError.message}`);
+    }
+
+    if (!newProject) {
+      throw new Error('Failed to create project');
+    }
+
+    // Try to create in Salesforce if configured
+    // Run sync directly (synchronous) - wait for completion before sending response
+    const projectIdToSync = newProject.id; // Capture project ID
+    
+    // Check if Salesforce settings are configured before attempting sync
+    const fs = require('fs');
+    const path = require('path');
+    const settingsPath = path.join(__dirname, '../data/salesforce-settings.json');
+    
+    // Capture request context before background task
+    const authToken = req.headers.authorization;
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const salesforceUrl = `${baseUrl}/api/salesforce/create-project`;
+    
+    // Try to sync to Salesforce directly (synchronous)
+    // This will wait for the sync to complete before sending the response
+    try {
+      console.log(`[Direct Sync] Starting Salesforce sync for project: ${projectIdToSync}`);
+      console.log(`[Direct Sync] Project data keys: ${Object.keys(projectData).length}`);
+      console.log(`[Direct Sync] Project Type: ${projectData.projectType}`);
+      console.log(`[Direct Sync] Contributor Project Name: ${projectData.contributorProjectName}`);
+    
+      // Check if Salesforce settings are configured
+      if (!fs.existsSync(settingsPath)) {
+        console.log(`[Direct Sync] ⚠️ Salesforce settings not configured. Skipping sync for project: ${projectIdToSync}`);
+        const projectIndex = projects.findIndex(p => p.id === projectIdToSync);
+        if (projectIndex !== -1) {
+          projects[projectIndex].salesforceSyncStatus = 'failed';
+          projects[projectIndex].salesforceSyncError = 'Salesforce settings not configured';
+          saveProjects(projects);
+        }
+        // Continue to response - don't block
+      } else {
+        console.log(`[Direct Sync] Calling Salesforce create-project via internal HTTP`);
+        
+        // Use localhost with shorter timeout for internal calls
+        const internalUrl = `http://127.0.0.1:${process.env.PORT || 5000}/api/salesforce/create-project`;
+      }
+    } catch (salesforceError) {
+      // Log error but don't fail the request - project is already saved locally
+      console.error(`[Direct Sync] ❌ Salesforce sync error for project: ${projectIdToSync}`);
+      console.error(`[Direct Sync] Error response:`, salesforceError.response?.data);
+      console.error(`[Direct Sync] Error message:`, salesforceError.message);
+      console.error(`[Direct Sync] Error status:`, salesforceError.response?.status);
+      
+      // Extract error message
+      const errorMessage = salesforceError.response?.data?.error || 
+                          salesforceError.response?.data?.message || 
+                          salesforceError.response?.data?.details ||
+                          salesforceError.message || 
+                          'Unknown Salesforce error';
+      
+      console.log(`[Direct Sync] Extracted error message: ${errorMessage}`);
+      
+      // Find and update the project in the array
+      const projectIndex = projects.findIndex(p => p.id === projectIdToSync);
+      
+      if (projectIndex !== -1) {
+        const projectToUpdate = projects[projectIndex];
+        projectToUpdate.salesforceSyncStatus = 'failed';
+        projectToUpdate.salesforceSyncError = errorMessage;
+        projects[projectIndex] = projectToUpdate;
+        saveProjects(projects);
+        console.log(`[Direct Sync] ✅ Project ${projectIdToSync} marked as failed and saved: ${errorMessage}`);
+      } else {
+        console.error(`[Direct Sync] ❌ Project ${projectIdToSync} not found in projects array for error update`);
+      }
+    }
+
+    // Clean the response data to ensure it's JSON serializable
+    // Create a simple, safe response object
+    console.log('Creating response data...');
+    try {
+      // Reload project from array to get latest sync status
+      const projectIndex = projects.findIndex(p => p.id === projectIdToSync);
+      if (projectIndex !== -1) {
+        newProject = projects[projectIndex];
+      }
+      
+      const responseData = {
+        id: newProject.id,
+        projectName: newProject.projectName || newProject.name || 'New Project',
+        status: newProject.status || 'draft',
+        createdAt: newProject.createdAt,
+        createdBy: newProject.createdBy,
+        salesforceId: newProject.salesforceId || null,
+        salesforceSyncStatus: newProject.salesforceSyncStatus || 'pending'
+      };
+
+      console.log('Response data created:', responseData);
+      
+      // Send response after Salesforce sync completes
+      if (!res.headersSent) {
+        console.log('Sending response...');
+        res.status(201).json(responseData);
+        console.log('Response sent successfully');
+      } else {
+        console.log('Response already sent, skipping');
+      }
+    } catch (responseError) {
+      console.error('Error creating/sending response data:', responseError);
+      console.error('Response error stack:', responseError.stack);
+      // If we can't create response data, send a simple success response
+      if (!res.headersSent) {
+        console.log('Sending fallback response...');
+        try {
+          res.status(201).json({
+            id: newProject.id,
+            message: 'Project created successfully',
+            salesforceSyncStatus: newProject.salesforceSyncStatus || 'pending'
+          });
+        } catch (fallbackError) {
+          console.error('Error sending fallback response:', fallbackError);
+        }
+      }
+    }
+    
+    console.log('=== CREATE PROJECT REQUEST END ===');
+  } catch (error) {
+    console.error('=== ERROR IN CREATE PROJECT ===');
+    console.error('Error creating project:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Error type:', typeof error);
+    console.error('Error constructor:', error.constructor?.name);
+    
+    // If save failed, try to rollback if possible
+    if (newProject && error.message && error.message.includes('saving projects')) {
+      const projectIndex = projects.findIndex(p => p.id === newProject.id);
+      if (projectIndex !== -1) {
+        projects.splice(projectIndex, 1);
+        try {
+          saveProjects(projects);
+        } catch (rollbackError) {
+          console.error('Error during rollback:', rollbackError);
+        }
+      }
+    }
+    
+    // If response was already sent, log the error but don't try to send another
+    if (res.headersSent) {
+      console.error('Response already sent, cannot send error response');
+      return;
+    }
+    
+    // Re-throw error to be caught by asyncHandler and passed to global error handler
+    // This ensures consistent JSON error responses
+    throw error;
+  }
+}));
+
+// Update project
+router.put('/:id', authenticate, authorize('edit_project', 'all'), (req, res) => {
+  const projectIndex = projects.findIndex(p => p.id === req.params.id);
+  
+  if (projectIndex === -1) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  projects[projectIndex] = {
+    ...projects[projectIndex],
+    ...req.body,
+    updatedAt: new Date().toISOString(),
+    updatedBy: req.user.email
+  };
+
+  saveProjects(projects); // Save to persistent storage
+
+  res.json(projects[projectIndex]);
+});
+
+// Delete project
+router.delete('/:id', authenticate, authorize('all'), (req, res) => {
+  const projectIndex = projects.findIndex(p => p.id === req.params.id);
+  
+  if (projectIndex === -1) {
+    return res.status(404).json({ error: 'Project not found' });
+  }
+
+  projects.splice(projectIndex, 1);
+  saveProjects(projects); // Save to persistent storage
+
+  res.json({ message: 'Project deleted' });
+});
+
+module.exports = router;
+

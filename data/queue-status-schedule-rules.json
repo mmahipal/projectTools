@@ -1,0 +1,72 @@
+[
+  {
+    "id": "auto_production_after_days",
+    "name": "Mahi Rule",
+    "type": "time_based",
+    "enabled": true,
+    "fromStatus": "Calibration Queue",
+    "toStatus": "Test Queue",
+    "days": null,
+    "conditions": [],
+    "createdAt": "2025-11-22T14:23:02.249Z",
+    "updatedAt": "2025-12-04T11:30:46.182Z",
+    "timeType": "date",
+    "specificDate": "2025-12-04",
+    "filters": {
+      "projects": {
+        "mode": "include",
+        "selected": [
+          "a01VC00003IpSpZYAV"
+        ]
+      },
+      "projectObjectives": {
+        "mode": "include",
+        "selected": [
+          "a0AVC000005lQ5p2AE"
+        ]
+      },
+      "contributorProjects": {
+        "mode": "none",
+        "selected": []
+      }
+    },
+    "status": "done",
+    "lastExecutedAt": "2025-12-04T11:30:35.947Z",
+    "lastExecutionCount": 1,
+    "specificTime": "17:00"
+  },
+  {
+    "id": "auto_test_after_days",
+    "name": "Auto-move to Test Queue after X days",
+    "type": "condition_based",
+    "enabled": false,
+    "fromStatus": "Calibration Queue",
+    "toStatus": "Test Queue",
+    "days": 14,
+    "conditions": [
+      {
+        "field": "Status__c",
+        "operator": "equals",
+        "value": "Active"
+      }
+    ],
+    "createdAt": "2025-11-22T14:23:02.249Z",
+    "updatedAt": "2025-12-03T10:59:42.748Z",
+    "timeType": "days",
+    "specificDate": "",
+    "filters": {
+      "projects": {
+        "mode": "none",
+        "selected": []
+      },
+      "projectObjectives": {
+        "mode": "none",
+        "selected": []
+      },
+      "contributorProjects": {
+        "mode": "none",
+        "selected": []
+      }
+    }
+  }
+]

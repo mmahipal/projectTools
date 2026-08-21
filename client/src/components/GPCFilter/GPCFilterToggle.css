@@ -1,0 +1,57 @@
+.gpc-filter-toggle {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.filter-active-indicator,
+.filter-override-indicator {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.filter-active-indicator {
+  color: #059669;
+}
+
+.filter-override-indicator {
+  color: #6b7280;
+}
+
+.filter-override-btn,
+.filter-reset-btn {
+  margin-left: auto;
+  padding: 6px 12px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: #374151;
+}
+
+.filter-override-btn:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.filter-reset-btn {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.filter-reset-btn:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+}
+

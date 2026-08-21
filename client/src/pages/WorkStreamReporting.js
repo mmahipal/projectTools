@@ -1,0 +1,1778 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
+import useSidebarWidth from '../hooks/useSidebarWidth';
+import { Menu, RefreshCw, Loader, X, Eye, Download, Search, TrendingUp, BarChart3, ChevronDown, ChevronUp, FileText, Upload } from 'lucide-react';
+import UserProfileDropdown from '../components/UserProfileDropdown/UserProfileDropdown';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, AreaChart, Area } from 'recharts';
+import apiClient from '../config/api';
+import toast from 'react-hot-toast';
+import * as XLSX from 'xlsx';
+import WorkStreamFilter from '../components/WorkStreamManagement/WorkStreamFilter';
+import { useGPCFilter } from '../context/GPCFilterContext';
+import { applyGPCFilterToParams } from '../utils/gpcFilter';
+import { cachedFetch } from '../utils/requestCache';
+import GPCFilterToggle from '../components/GPCFilter/GPCFilterToggle';
+import '../styles/WorkStreamReporting.css';
+import '../styles/Sidebar.css';
+import '../styles/GlobalHeader.css';
+import '../styles/GlobalTableHeaders.css';
+
+const WorkStreamReporting = ({ hideHeader = false }) => {
+  const { user, logout } = useAuth();
+  const { getFilterParams } = useGPCFilter();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const sidebarWidth = useSidebarWidth(sidebarOpen);
+  const [loading, setLoading] = useState(true);
+  const [workstreams, setWorkstreams] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showProjectObjectivesModal, setShowProjectObjectivesModal] = useState(false);
+  const [selectedDeliveryTool, setSelectedDeliveryTool] = useState(null);
+  const [projectObjectives, setProjectObjectives] = useState([]);
+  const [loadingProjectObjectives, setLoadingProjectObjectives] = useState(false);
+  const [showContributorProjectsModal, setShowContributorProjectsModal] = useState(false);
+  const [selectedProjectObjective, setSelectedProjectObjective] = useState(null);
+  const [contributorProjects, setContributorProjects] = useState([]);
+  const [loadingContributorProjects, setLoadingContributorProjects] = useState(false);
+  const [loadingMoreContributorProjects, setLoadingMoreContributorProjects] = useState(false);
+  const [contributorProjectsHasMore, setContributorProjectsHasMore] = useState(false);
+  const [contributorProjectsCounts, setContributorProjectsCounts] = useState({});
+  const [loadingContributorCounts, setLoadingContributorCounts] = useState({}); // Track loading per delivery tool
+  const [downloadingContributorProjects, setDownloadingContributorProjects] = useState({}); // Track downloading per delivery tool
+  const [selectedDeliveryTools, setSelectedDeliveryTools] = useState(new Set()); // For selective refresh
+  const [dataStale, setDataStale] = useState(false);
+  const [contributorProjectsModalCollapsed, setContributorProjectsModalCollapsed] = useState(false); // Track if data is stale
+  const [dataAge, setDataAge] = useState(0); // Track data age in seconds
+  const [projectObjectivesOffset, setProjectObjectivesOffset] = useState(0); // For infinite scroll
+  const [projectObjectivesHasMore, setProjectObjectivesHasMore] = useState(false);
+  const [projectObjectivesTotal, setProjectObjectivesTotal] = useState(0);
+  const [loadingMoreProjectObjectives, setLoadingMoreProjectObjectives] = useState(false);
+  const infiniteScrollRef = useRef(null); // Ref for infinite scroll trigger
+  const [showAnalytics, setShowAnalytics] = useState(false);
+  const [analyticsData, setAnalyticsData] = useState({});
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
+  const [analyticsDays, setAnalyticsDays] = useState(30);
+  const [projectObjectivesModalCollapsed, setProjectObjectivesModalCollapsed] = useState(false);
+  const [selectedTools, setSelectedTools] = useState(new Set()); // Track which tools are selected for display
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    projectStatus: [],
+    projectObjectiveStatus: ['Open', 'Paused', 'Hidden'] // Default filter
+  });
+
+  // Frontend cache for workstreams summary
+  const [cachedWorkstreams, setCachedWorkstreams] = useState(null);
+  const [cacheTimestamp, setCacheTimestamp] = useState(null);
+  const isInitialMount = useRef(true);
+  const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+  const fetchWorkstreams = useCallback(async (forceRefresh = false, selectedTools = null, retryCount = 0) => {
+    // Check frontend cache first (unless force refresh or filters changed)
+    const filtersChanged = JSON.stringify(filters) !== JSON.stringify(cachedWorkstreams?.filters);
+    if (!forceRefresh && !filtersChanged && cachedWorkstreams && cacheTimestamp) {
+      const age = Date.now() - cacheTimestamp;
+      if (age < CACHE_TTL) {
+        setWorkstreams(cachedWorkstreams.workstreams);
+        setDataStale(age > CACHE_TTL * 0.8); // Stale if > 80% of TTL
+        setDataAge(Math.round(age / 1000));
+        setLoading(false);
+        return;
+      } else {
+        // Cache expired, but show stale data with warning
+        setWorkstreams(cachedWorkstreams.workstreams);
+        setDataStale(true);
+        setDataAge(Math.round(age / 1000));
+        toast('Showing cached data. Fetching fresh data in background...', { 
+          duration: 3000,
+          icon: '⚠️',
+          style: {
+            background: '#fef3c7',
+            color: '#92400e',
+          }
+        });
+      }
+    }
+
+    setLoading(true);
+    const MAX_RETRIES = 2;
+    
+    try {
+      // Build query parameters
+      const params = new URLSearchParams();
+      if (forceRefresh) params.append('refresh', 'true');
+      if (filters.projectStatus && filters.projectStatus.length > 0) {
+        filters.projectStatus.forEach(status => params.append('projectStatus', status));
+      }
+      if (filters.projectObjectiveStatus && filters.projectObjectiveStatus.length > 0) {
+        filters.projectObjectiveStatus.forEach(status => params.append('projectObjectiveStatus', status));
+      }
+      
+      // Apply GPC-Filter
+      const gpcFilterParams = getFilterParams();
+      applyGPCFilterToParams(params, gpcFilterParams);
+      
+      const queryString = params.toString();
+      const url = `/workstream-reporting/summary${queryString ? '?' + queryString : ''}`;
+      
+      // Use cached fetch for workstream summary (cache for 2 minutes, unless force refresh)
+      const urlParams = Object.fromEntries(params.entries());
+      const response = await cachedFetch(
+        '/workstream-reporting/summary',
+        urlParams,
+        async () => apiClient.get(url, {
+          timeout: 300000 // 5 minutes timeout to match server capabilities
+        }),
+        { 
+          ttl: 2 * 60 * 1000, // 2 minutes cache
+          useCache: !forceRefresh // Don't use cache if force refresh
+        }
+      );
+      // Handle both cached response (which is already data) and axios response
+      const responseData = response?.data || response;
+      if (responseData?.success) {
+        const workstreamsData = responseData.workstreams || [];
+        
+        // If selective refresh, only update selected delivery tools
+        if (selectedTools && selectedTools.size > 0) {
+          setWorkstreams(prev => {
+            const updated = [...prev];
+            workstreamsData.forEach(newWs => {
+              if (selectedTools.has(newWs.deliveryToolName)) {
+                const index = updated.findIndex(ws => ws.deliveryToolName === newWs.deliveryToolName);
+                if (index >= 0) {
+                  updated[index] = newWs;
+                }
+              }
+            });
+            return updated;
+          });
+        } else {
+          // Append new data instead of replacing to preserve existing data during batch loading
+          setWorkstreams(prev => {
+            // If forceRefresh, replace; otherwise merge/update existing workstreams
+            if (forceRefresh) {
+              return workstreamsData;
+            }
+            // Merge: update existing workstreams or add new ones
+            const existingMap = new Map(prev.map(ws => [ws.deliveryToolName, ws]));
+            workstreamsData.forEach(newWs => {
+              existingMap.set(newWs.deliveryToolName, newWs);
+            });
+            return Array.from(existingMap.values());
+          });
+        }
+        
+        // Update cache with filters
+        setCachedWorkstreams({ workstreams: workstreamsData, filters: { ...filters } });
+        setCacheTimestamp(Date.now());
+        setDataStale(response.data.stale || false);
+        setDataAge(response.data.age || 0);
+        
+      } else {
+        toast.error(response.data.error || 'Failed to fetch workstreams');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch workstreams';
+      
+      // Retry logic for timeout errors
+      if ((error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.status === 504) && retryCount < MAX_RETRIES) {
+        // Wait a bit before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return fetchWorkstreams(forceRefresh, selectedTools, retryCount + 1);
+      }
+      
+      // Graceful degradation: show cached data if available
+      if (cachedWorkstreams) {
+        toast(`${errorMessage}. Showing cached data.`, { 
+          duration: 5000,
+          icon: '⚠️',
+          style: {
+            background: '#fef3c7',
+            color: '#92400e',
+          }
+        });
+        setWorkstreams(cachedWorkstreams);
+        setDataStale(true);
+        setDataAge(Math.round((Date.now() - cacheTimestamp) / 1000));
+      } else {
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout') || error.status === 504) {
+          toast.error('Request timed out. The server may be processing a large dataset. Please try again in a moment.');
+        } else {
+          toast.error(errorMessage);
+        }
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [filters, cachedWorkstreams, cacheTimestamp, getFilterParams]);
+
+  // Track previous filters to detect actual changes
+  const prevFiltersRef = useRef(null);
+  const loadingInProgressRef = useRef(false);
+  
+  useEffect(() => {
+    // Prevent multiple simultaneous loads
+    if (loadingInProgressRef.current) {
+      return;
+    }
+    
+    // On initial load, force refresh to get real-time data from Salesforce
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      prevFiltersRef.current = JSON.stringify(filters);
+      loadingInProgressRef.current = true;
+      fetchWorkstreams(true).finally(() => {
+        loadingInProgressRef.current = false;
+      });
+      return;
+    }
+    
+    // Only reload if filters actually changed (not just object reference)
+    const currentFiltersStr = JSON.stringify(filters);
+    if (prevFiltersRef.current !== currentFiltersStr) {
+      prevFiltersRef.current = currentFiltersStr;
+      // Use forceRefresh=false to preserve existing data and continue batch loading
+      // This allows batch loading to continue without resetting data
+      loadingInProgressRef.current = true;
+      fetchWorkstreams(false).finally(() => {
+        loadingInProgressRef.current = false;
+      });
+    }
+  }, [filters, fetchWorkstreams]);
+
+  // Frontend cache for contributor counts
+  const [cachedContributorCounts, setCachedContributorCounts] = useState({});
+  const [contributorCountTimestamps, setContributorCountTimestamps] = useState({});
+  const CONTRIBUTOR_COUNT_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+
+  const fetchContributorProjectsCount = async (deliveryToolName, forceRefresh = false) => {
+    // Don't fetch for Unassigned
+    if (deliveryToolName === 'Unassigned') {
+      toast('Unassigned workstreams have no contributor projects.', {
+        icon: 'ℹ️',
+        style: {
+          background: '#dbeafe',
+          color: '#1e40af',
+        }
+      });
+      return;
+    }
+
+    // Check frontend cache first (unless force refresh)
+    if (!forceRefresh && cachedContributorCounts[deliveryToolName] !== undefined) {
+      const timestamp = contributorCountTimestamps[deliveryToolName];
+      if (timestamp) {
+        const age = Date.now() - timestamp;
+        if (age < CONTRIBUTOR_COUNT_CACHE_TTL) {
+          setContributorProjectsCounts(prev => ({
+            ...prev,
+            [deliveryToolName]: cachedContributorCounts[deliveryToolName]
+          }));
+          return;
+        }
+      }
+    }
+
+    // If already loaded and not expired, don't fetch again
+    if (contributorProjectsCounts[deliveryToolName] !== undefined && !forceRefresh) {
+      return;
+    }
+
+    // Set loading state for this specific delivery tool
+    setLoadingContributorCounts(prev => ({ ...prev, [deliveryToolName]: true }));
+
+    try {
+      const encodedDeliveryTool = encodeURIComponent(deliveryToolName);
+      const refreshParam = forceRefresh ? '?refresh=true' : '';
+      const params = new URLSearchParams();
+      if (refreshParam) params.append('refresh', 'true');
+      const gpcFilterParams = getFilterParams();
+      applyGPCFilterToParams(params, gpcFilterParams);
+      const queryString = params.toString();
+      const url = `/workstream-reporting/contributor-projects-count/${encodedDeliveryTool}${queryString ? '?' + queryString : refreshParam}`;
+      const response = await apiClient.get(url, {
+        timeout: 300000 // 5 minutes timeout to match download endpoint and allow for large datasets
+      });
+      
+      if (response.data.success) {
+        const count = response.data.contributorProjectsCount || 0;
+        setContributorProjectsCounts(prev => ({
+          ...prev,
+          [deliveryToolName]: count
+        }));
+        
+        // Update frontend cache
+        setCachedContributorCounts(prev => ({
+          ...prev,
+          [deliveryToolName]: count
+        }));
+        setContributorCountTimestamps(prev => ({
+          ...prev,
+          [deliveryToolName]: Date.now()
+        }));
+      } else {
+        toast.error(response.data.error || 'Failed to fetch contributor project count');
+        // Don't set count to 0 on error - keep "Get Count" button visible for retry
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch contributor project count';
+      
+      // Graceful degradation: use cached count if available
+      if (cachedContributorCounts[deliveryToolName] !== undefined) {
+        toast(`${errorMessage}. Using cached count.`, { 
+          duration: 3000,
+          icon: '⚠️',
+          style: {
+            background: '#fef3c7',
+            color: '#92400e',
+          }
+        });
+        setContributorProjectsCounts(prev => ({
+          ...prev,
+          [deliveryToolName]: cachedContributorCounts[deliveryToolName]
+        }));
+      } else {
+        // Show specific error message for timeout
+        if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+          toast.error('Request timed out. Please try again.');
+        } else {
+          toast.error(errorMessage);
+        }
+      }
+      
+      // Don't set count to 0 on error - keep "Get Count" button visible for retry
+    } finally {
+      setLoadingContributorCounts(prev => {
+        const newState = { ...prev };
+        delete newState[deliveryToolName];
+        return newState;
+      });
+    }
+  };
+
+  const handleRefresh = async (selectedOnly = false, e = null) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setRefreshing(true);
+    try {
+      if (selectedOnly && selectedDeliveryTools.size > 0) {
+        // Selective refresh: only refresh selected delivery tools
+        await fetchWorkstreams(true, selectedDeliveryTools);
+        // Clear selection after refresh
+        setSelectedDeliveryTools(new Set());
+        toast.success(`Refreshed ${selectedDeliveryTools.size} delivery tool(s)`);
+      } else {
+        // Full refresh
+        await fetchWorkstreams(true);
+        // Clear contributor project counts on full refresh
+        setContributorProjectsCounts({});
+        setCachedContributorCounts({});
+        setContributorCountTimestamps({});
+        toast.success('All data refreshed');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.error || error.message || 'Failed to refresh workstreams');
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleSelectDeliveryTool = (deliveryToolName, isSelected) => {
+    setSelectedDeliveryTools(prev => {
+      const newSet = new Set(prev);
+      if (isSelected) {
+        newSet.add(deliveryToolName);
+      } else {
+        newSet.delete(deliveryToolName);
+      }
+      return newSet;
+    });
+  };
+
+  const handleDeliveryToolClick = async (deliveryToolName) => {
+    // Don't allow clicking on "Unassigned" category
+    if (deliveryToolName === 'Unassigned') {
+      toast('Unassigned workstreams cannot be clicked. They have no delivery tool name.', {
+        icon: 'ℹ️',
+        style: {
+          background: '#dbeafe',
+          color: '#1e40af',
+        }
+      });
+      return;
+    }
+
+    setSelectedDeliveryTool(deliveryToolName);
+    setShowProjectObjectivesModal(true);
+    setProjectObjectives([]);
+    setProjectObjectivesOffset(0);
+    setProjectObjectivesHasMore(false);
+    setProjectObjectivesTotal(0);
+
+    // Fetch first page (loading state handled in fetchProjectObjectives)
+    await fetchProjectObjectives(deliveryToolName, 0);
+  };
+
+  const fetchProjectObjectives = useCallback(async (deliveryToolName, offset = 0, append = false) => {
+    if (!append) {
+      setLoadingProjectObjectives(true);
+    }
+    try {
+      const encodedDeliveryTool = encodeURIComponent(deliveryToolName);
+      const params = new URLSearchParams();
+      params.append('limit', '50');
+      params.append('offset', offset.toString());
+      
+      // Apply status filters (same as summary endpoint)
+      if (filters.projectStatus && filters.projectStatus.length > 0) {
+        filters.projectStatus.forEach(status => params.append('projectStatus', status));
+      }
+      if (filters.projectObjectiveStatus && filters.projectObjectiveStatus.length > 0) {
+        filters.projectObjectiveStatus.forEach(status => params.append('projectObjectiveStatus', status));
+      }
+      
+      const gpcFilterParams = getFilterParams();
+      applyGPCFilterToParams(params, gpcFilterParams);
+      const response = await apiClient.get(`/workstream-reporting/project-objectives/${encodedDeliveryTool}?${params.toString()}`);
+      if (response.data.success) {
+        const newObjectives = response.data.projectObjectives || [];
+        if (append) {
+          setProjectObjectives(prev => [...prev, ...newObjectives]);
+        } else {
+          setProjectObjectives(newObjectives);
+        }
+        setProjectObjectivesHasMore(response.data.hasMore || false);
+        setProjectObjectivesTotal(response.data.total || 0);
+        setProjectObjectivesOffset(offset + newObjectives.length);
+        
+      } else {
+        toast.error(response.data.error || 'Failed to fetch project objectives');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch project objectives';
+      toast.error(errorMessage);
+    } finally {
+      setLoadingProjectObjectives(false);
+      setLoadingMoreProjectObjectives(false);
+    }
+  }, [filters, getFilterParams]);
+
+  const loadMoreProjectObjectives = useCallback(async () => {
+    if (!selectedDeliveryTool || !projectObjectivesHasMore || loadingMoreProjectObjectives) {
+      return;
+    }
+    setLoadingMoreProjectObjectives(true);
+    await fetchProjectObjectives(selectedDeliveryTool, projectObjectivesOffset, true);
+  }, [selectedDeliveryTool, projectObjectivesHasMore, loadingMoreProjectObjectives, projectObjectivesOffset]);
+
+  // Refresh project objectives modal when filters change
+  useEffect(() => {
+    if (showProjectObjectivesModal && selectedDeliveryTool) {
+      // Reset pagination and reload with new filters
+      setProjectObjectives([]);
+      setProjectObjectivesOffset(0);
+      setProjectObjectivesHasMore(false);
+      setProjectObjectivesTotal(0);
+      fetchProjectObjectives(selectedDeliveryTool, 0);
+    }
+  }, [showProjectObjectivesModal, selectedDeliveryTool, filters.projectStatus, filters.projectObjectiveStatus, fetchProjectObjectives]);
+
+  // Set up IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const element = infiniteScrollRef.current;
+    if (!element || !projectObjectivesHasMore || loadingMoreProjectObjectives) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreProjectObjectives();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(element);
+
+    // Cleanup on unmount
+    return () => {
+      observer.disconnect();
+    };
+  }, [projectObjectivesHasMore, loadingMoreProjectObjectives, loadMoreProjectObjectives]);
+
+  const handleViewContributorProjects = async (projectObjective, append = false) => {
+    if (!append) {
+      setSelectedProjectObjective(projectObjective);
+      setShowContributorProjectsModal(true);
+      setLoadingContributorProjects(true);
+      setContributorProjects([]);
+      setContributorProjectsHasMore(false);
+    } else {
+      setLoadingMoreContributorProjects(true);
+    }
+
+    try {
+      const offset = append ? contributorProjects.length : 0;
+      const limit = 1000;
+      const params = new URLSearchParams();
+      params.append('offset', offset.toString());
+      params.append('limit', limit.toString());
+      const gpcFilterParams = getFilterParams();
+      applyGPCFilterToParams(params, gpcFilterParams);
+      const response = await apiClient.get(`/workstream-reporting/contributor-projects/${projectObjective.id}?${params.toString()}`);
+      if (response.data.success) {
+        if (append) {
+          setContributorProjects(prev => [...prev, ...(response.data.contributorProjects || [])]);
+        } else {
+          setContributorProjects(response.data.contributorProjects || []);
+        }
+        setContributorProjectsHasMore(response.data.hasMore || false);
+      } else {
+        toast.error(response.data.error || 'Failed to fetch contributor projects');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to fetch contributor projects';
+      toast.error(errorMessage);
+    } finally {
+      if (append) {
+        setLoadingMoreContributorProjects(false);
+      } else {
+        setLoadingContributorProjects(false);
+      }
+    }
+  };
+
+  const handleLoadMoreContributorProjects = () => {
+    if (selectedProjectObjective && contributorProjectsHasMore && !loadingMoreContributorProjects) {
+      handleViewContributorProjects(selectedProjectObjective, true);
+    }
+  };
+
+  // Download workstreams (all or by tool)
+  const handleDownloadWorkstreams = async (deliveryToolName = null) => {
+    try {
+      setDownloadingContributorProjects(prev => ({ ...prev, [deliveryToolName || 'all']: true }));
+      
+      // Include filter parameters (same as summary endpoint)
+      const params = {
+        ...(deliveryToolName ? { deliveryToolName } : {}),
+        ...(filters.projectStatus && filters.projectStatus.length > 0 ? { projectStatus: filters.projectStatus } : {}),
+        ...(filters.projectObjectiveStatus && filters.projectObjectiveStatus.length > 0 ? { projectObjectiveStatus: filters.projectObjectiveStatus } : {})
+      };
+      const urlParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          value.forEach(v => urlParams.append(key, v));
+        } else {
+          urlParams.append(key, value);
+        }
+      });
+      const gpcFilterParams = getFilterParams();
+      applyGPCFilterToParams(urlParams, gpcFilterParams);
+      const response = await apiClient.get(`/workstream-reporting/download-workstreams?${urlParams.toString()}`);
+      
+      if (response.data.success && response.data.workstreams) {
+        const workstreamsData = response.data.workstreams;
+        
+        // Define column order (priority fields first)
+        const priorityColumns = ['Delivery Tool Name', 'Name', 'Functionality', 'Owner Name', 'Project Objective Name'];
+        
+        // Get all columns from the data
+        const allColumns = new Set();
+        workstreamsData.forEach(row => {
+          Object.keys(row).forEach(key => allColumns.add(key));
+        });
+        
+        // Order columns: priority first, then others alphabetically
+        const orderedColumns = [
+          ...priorityColumns.filter(col => allColumns.has(col)),
+          ...Array.from(allColumns).filter(col => !priorityColumns.includes(col)).sort()
+        ];
+        
+        // Reorder data to match column order
+        const orderedData = workstreamsData.map(row => {
+          const orderedRow = {};
+          orderedColumns.forEach(col => {
+            orderedRow[col] = row[col] !== undefined ? row[col] : null;
+          });
+          return orderedRow;
+        });
+        
+        // Create Excel file with ordered columns
+        const ws = XLSX.utils.json_to_sheet(orderedData, { header: orderedColumns });
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Workstreams');
+        
+        const filename = deliveryToolName 
+          ? `Workstreams_${deliveryToolName.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.xlsx`
+          : `All_Workstreams_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        XLSX.writeFile(wb, filename);
+        toast.success(`Downloaded ${workstreamsData.length} workstream(s)`);
+      } else {
+        toast.error(response.data.error || 'Failed to download workstreams');
+      }
+    } catch (error) {
+      console.error('Error downloading workstreams:', error);
+      toast.error(error.response?.data?.error || error.message || 'Failed to download workstreams');
+    } finally {
+      setDownloadingContributorProjects(prev => ({ ...prev, [deliveryToolName || 'all']: false }));
+    }
+  };
+
+  // Download contributor projects for a specific delivery tool
+  const handleDownloadContributorProjects = async (deliveryToolName) => {
+    // Don't download for Unassigned
+    if (deliveryToolName === 'Unassigned') {
+      toast('Unassigned workstreams have no contributor projects.', {
+        icon: 'ℹ️',
+        style: {
+          background: '#dbeafe',
+          color: '#1e40af',
+        }
+      });
+      return;
+    }
+
+    // Check if count is available
+    const expectedCount = contributorProjectsCounts[deliveryToolName];
+    if (expectedCount === undefined) {
+      toast.error('Please get the count first before downloading.');
+      return;
+    }
+
+    if (expectedCount === 0) {
+      toast('No contributor projects to download.', {
+        icon: 'ℹ️',
+        style: {
+          background: '#dbeafe',
+          color: '#1e40af',
+        }
+      });
+      return;
+    }
+
+    // Set downloading state
+    setDownloadingContributorProjects(prev => ({ ...prev, [deliveryToolName]: true }));
+    
+    try {
+      const encodedDeliveryTool = encodeURIComponent(deliveryToolName);
+      // Include filter parameters (same as summary endpoint)
+      const params = {
+        ...(filters.projectStatus && filters.projectStatus.length > 0 ? { projectStatus: filters.projectStatus } : {}),
+        ...(filters.projectObjectiveStatus && filters.projectObjectiveStatus.length > 0 ? { projectObjectiveStatus: filters.projectObjectiveStatus } : {})
+      };
+      const urlParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          value.forEach(v => urlParams.append(key, v));
+        } else {
+          urlParams.append(key, value);
+        }
+      });
+      const gpcFilterParams = getFilterParams();
+      applyGPCFilterToParams(urlParams, gpcFilterParams);
+      const response = await apiClient.get(`/workstream-reporting/contributor-projects-by-tool/${encodedDeliveryTool}?${urlParams.toString()}`, {
+        timeout: 300000 // 5 minutes timeout for large datasets
+      });
+
+      if (response.data.success) {
+        const contributorProjects = response.data.contributorProjects || [];
+        const actualCount = contributorProjects.length;
+        
+        // Verify count matches
+        if (actualCount !== expectedCount) {
+          toast(`Downloaded ${actualCount} records, but table shows ${expectedCount}. Some records may be missing due to limits.`, { 
+            duration: 5000,
+            icon: '⚠️',
+            style: {
+              background: '#fef3c7',
+              color: '#92400e',
+            }
+          });
+        }
+
+        if (contributorProjects.length === 0) {
+          toast('No contributor projects found to download.', {
+            icon: 'ℹ️',
+            style: {
+              background: '#dbeafe',
+              color: '#1e40af',
+            }
+          });
+          return;
+        }
+
+        // Prepare data for export - only Contributor Project, Project Objective, Status
+        const headers = [
+          { key: 'name', label: 'Contributor Project' },
+          { key: 'projectObjectiveName', label: 'Project Objective' },
+          { key: 'status', label: 'Status' }
+        ];
+
+        // Sanitize delivery tool name for filename
+        const sanitizedDeliveryTool = deliveryToolName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        const filename = `Contributor_Projects_${sanitizedDeliveryTool}_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        exportToExcel(contributorProjects, headers, filename);
+        toast.success(`Downloaded ${actualCount} contributor project${actualCount !== 1 ? 's' : ''} for ${deliveryToolName}`);
+      } else {
+        toast.error(response.data.error || 'Failed to download contributor projects');
+      }
+    } catch (error) {
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to download contributor projects';
+      toast.error(errorMessage);
+    } finally {
+      setDownloadingContributorProjects(prev => ({ ...prev, [deliveryToolName]: false }));
+    }
+  };
+
+  // Export functions
+  const exportToExcel = (data, headers, filename) => {
+    try {
+      // Prepare data for Excel - header row with labels
+      const headerLabels = headers.map(h => h.label);
+      const worksheetData = [
+        headerLabels, // Header row with labels
+        ...data.map(row => headers.map(header => {
+          const value = row[header.key];
+          // Handle null/undefined values - show empty string for Excel
+          // For contributor project count, if not retrieved (undefined), show empty string
+          if (value === null || value === undefined) {
+            return '';
+          }
+          // For contributor project count that is 0, show 0 (not empty)
+          return value;
+        }))
+      ];
+
+      // Create workbook and worksheet
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+
+      // Set column widths (auto-size based on content)
+      const columnWidths = headers.map(() => ({ wch: 25 }));
+      worksheet['!cols'] = columnWidths;
+
+      // Generate Excel file and download
+      XLSX.writeFile(workbook, filename);
+      toast.success('Excel file downloaded successfully');
+    } catch (error) {
+      toast.error('Failed to export to Excel');
+    }
+  };
+
+
+  const handleExportProjectObjectives = () => {
+    if (projectObjectives.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const headers = [
+      { key: 'name', label: 'Project Objective' },
+      { key: 'projectName', label: 'Project' },
+      { key: 'workstreamName', label: 'Associated WorkStream' },
+      { key: 'deliveryToolName', label: 'Delivery Tool Name' }
+    ];
+
+    // Sanitize filename - remove invalid characters
+    const sanitizedToolName = (selectedDeliveryTool || 'Unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `Project_Objectives_${sanitizedToolName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    exportToExcel(projectObjectives, headers, filename);
+  };
+
+  const handleExportContributorProjects = () => {
+    if (contributorProjects.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    const headers = [
+      { key: 'name', label: 'Contributor Project Name' },
+      { key: 'projectName', label: 'Project' },
+      { key: 'status', label: 'Status' }
+    ];
+
+    // Sanitize filename - remove invalid characters
+    const sanitizedObjectiveName = (selectedProjectObjective?.name || 'Unknown').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `Contributor_Projects_${sanitizedObjectiveName}_${new Date().toISOString().split('T')[0]}.xlsx`;
+    exportToExcel(contributorProjects, headers, filename);
+  };
+
+  const fetchAnalytics = async () => {
+    setLoadingAnalytics(true);
+    try {
+      const params = new URLSearchParams();
+      params.append('days', analyticsDays.toString());
+      const gpcFilterParams = getFilterParams();
+      applyGPCFilterToParams(params, gpcFilterParams);
+      const response = await apiClient.get(`/workstream-reporting/analytics?${params.toString()}`);
+      if (response.data.success) {
+        const trends = response.data.trends || {};
+        setAnalyticsData(trends);
+        // Initialize or update selected tools
+        const availableTools = Object.keys(trends);
+        if (availableTools.length > 0) {
+          if (selectedTools.size === 0) {
+            // First time: select all tools
+            setSelectedTools(new Set(availableTools));
+          } else {
+            // Update selection: keep existing selections if tools still exist, add new ones
+            const newSelection = new Set();
+            availableTools.forEach(tool => {
+              if (selectedTools.has(tool)) {
+                newSelection.add(tool);
+              }
+            });
+            // If no tools were kept, select all (user might have deselected everything)
+            if (newSelection.size === 0) {
+              setSelectedTools(new Set(availableTools));
+            } else {
+              setSelectedTools(newSelection);
+            }
+          }
+        }
+      } else {
+        toast.error(response.data.error || 'Failed to fetch analytics');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.error || error.message || 'Failed to fetch analytics');
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showAnalytics) {
+      fetchAnalytics();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showAnalytics, analyticsDays]);
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Generate unique colors for all tools
+  const generateUniqueColors = (count) => {
+    const baseColors = [
+      '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', 
+      '#06b6d4', '#ec4899', '#84cc16', '#f97316', '#6366f1',
+      '#14b8a6', '#eab308', '#a855f7', '#f43f5e', '#22c55e',
+      '#0ea5e9', '#d946ef', '#64748b', '#fb923c', '#34d399'
+    ];
+    
+    if (count <= baseColors.length) {
+      return baseColors.slice(0, count);
+    }
+    
+    // Generate additional colors if needed
+    const colors = [...baseColors];
+    for (let i = baseColors.length; i < count; i++) {
+      const hue = (i * 137.508) % 360; // Golden angle approximation for color distribution
+      const saturation = 60 + (i % 3) * 10; // Vary saturation
+      const lightness = 45 + (i % 2) * 10; // Vary lightness
+      colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
+    }
+    
+    return colors;
+  };
+
+  // Prepare chart data from analytics (include all tools, but style based on selection)
+  const prepareChartData = () => {
+    const allDates = new Set();
+    // Process all tools to get all dates
+    Object.values(analyticsData).forEach(trend => {
+      trend.forEach(point => allDates.add(point.date));
+    });
+    
+    const sortedDates = Array.from(allDates).sort();
+    const chartData = sortedDates.map(date => {
+      const dataPoint = { date: formatDate(date) };
+      // Include all tools in data
+      Object.keys(analyticsData).forEach(toolName => {
+        const trend = analyticsData[toolName];
+        const point = trend.find(p => p.date === date);
+        dataPoint[toolName] = point ? point.count : 0;
+      });
+      return dataPoint;
+    });
+    
+    return chartData;
+  };
+
+  // Handle tool selection toggle
+  const handleToolToggle = (toolName) => {
+    setSelectedTools(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(toolName)) {
+        newSet.delete(toolName);
+      } else {
+        newSet.add(toolName);
+      }
+      return newSet;
+    });
+  };
+
+  // Select all tools
+  const handleSelectAllTools = () => {
+    setSelectedTools(new Set(Object.keys(analyticsData)));
+  };
+
+  // Deselect all tools
+  const handleDeselectAllTools = () => {
+    setSelectedTools(new Set());
+  };
+
+  const handleExportToExcel = () => {
+    if (workstreams.length === 0) {
+      toast.error('No data to export');
+      return;
+    }
+
+    try {
+      // Prepare data for export - include contributor projects count
+      const exportData = workstreams.map(ws => ({
+        'Delivery Tool Name': ws.deliveryToolName || 'N/A',
+        'No. of Project Objectives': ws.projectObjectivesCount || 0,
+        'No. of Projects': ws.projectsCount || 0,
+        'No. of Workstreams': ws.workstreamCount || 0,
+        'Total Contributor Projects': contributorProjectsCounts[ws.deliveryToolName] !== undefined 
+          ? contributorProjectsCounts[ws.deliveryToolName] 
+          : 'N/A'
+      }));
+
+      // Create workbook and worksheet
+      const ws = XLSX.utils.json_to_sheet(exportData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Workstream Summary');
+
+      // Generate filename with timestamp
+      const filename = `Workstream_Summary_${new Date().toISOString().split('T')[0]}.xlsx`;
+
+      // Write and download
+      XLSX.writeFile(wb, filename);
+      toast.success(`Exported ${exportData.length} records to Excel`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      toast.error('Failed to export to Excel');
+    }
+  };
+
+  const content = (
+    <>
+      <div className="workstream-reporting-content">
+          {/* Stale Data Warning */}
+          {dataStale && (
+            <div style={{
+              padding: '12px 16px',
+              backgroundColor: '#fff3cd',
+              border: '1px solid #ffc107',
+              borderRadius: '4px',
+              marginBottom: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: '#856404'
+            }}>
+              <span>⚠️</span>
+              <span>
+                Showing cached data (age: {dataAge}s). Data may be outdated. 
+                <button 
+                  onClick={() => fetchWorkstreams(true)} 
+                  style={{ 
+                    marginLeft: '8px', 
+                    color: '#856404', 
+                    textDecoration: 'underline',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Refresh now
+                </button>
+              </span>
+            </div>
+          )}
+          
+          <div className="content-header" style={{ marginTop: '8px', paddingTop: '8px' }}>
+            <h2 style={{ marginTop: '0', marginBottom: '8px' }}>WorkStream Summary</h2>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+              <WorkStreamFilter
+                showFilters={showFilters}
+                onToggleFilters={() => setShowFilters(!showFilters)}
+                onApplyFilters={(newFilters) => {
+                  setFilters(newFilters);
+                  setShowFilters(false);
+                }}
+                onClearFilters={() => {
+                  setFilters({
+                    projectStatus: [],
+                    projectObjectiveStatus: ['Open', 'Paused', 'Hidden'] // Reset to default
+                  });
+                }}
+                filters={filters}
+              />
+              {selectedDeliveryTools.size > 0 && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={(e) => handleRefresh(true, e)}
+                  disabled={refreshing}
+                  style={{ marginRight: '8px' }}
+                >
+                  <RefreshCw size={16} className={refreshing ? 'spinning' : ''} />
+                  Refresh Selected ({selectedDeliveryTools.size})
+                </button>
+              )}
+              <button
+                className="btn-secondary"
+                onClick={() => setShowAnalytics(!showAnalytics)}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="View Analytics"
+              >
+                <TrendingUp size={16} />
+                {showAnalytics ? 'Hide' : 'Show'} Analytics
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={(e) => handleRefresh(false, e)}
+                disabled={refreshing}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <RefreshCw size={16} className={refreshing ? 'spinning' : ''} />
+                Refresh
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={handleExportToExcel}
+                disabled={workstreams.length === 0}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Export table data to Excel"
+              >
+                <Download size={16} />
+                Export to Excel
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => handleDownloadWorkstreams(null)}
+                disabled={loading}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                title="Download all workstreams with all fields"
+              >
+                <Download size={16} />
+                Download All Workstreams
+              </button>
+            </div>
+          </div>
+
+          {loading && workstreams.length === 0 ? (
+            <div className="loading-container">
+              <Loader className="spinning" size={24} style={{ color: '#08979C' }} />
+              <p>Loading workstreams...</p>
+            </div>
+          ) : (
+            <div className="summary-table-container">
+              <table className="summary-table">
+                <thead>
+                      <tr>
+                        <th style={{ width: '40px' }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedDeliveryTools.size === workstreams.length && workstreams.length > 0}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedDeliveryTools(new Set(workstreams.map(ws => ws.deliveryToolName)));
+                              } else {
+                                setSelectedDeliveryTools(new Set());
+                              }
+                            }}
+                          />
+                        </th>
+                        <th>Delivery Tool Name</th>
+                        <th>No. of Project Objectives</th>
+                        <th>No. of Projects</th>
+                        <th>No. of Workstreams</th>
+                        <th>Total Contributor Projects</th>
+                        <th>Actions</th>
+                      </tr>
+                </thead>
+                <tbody>
+                  {workstreams.length === 0 ? (
+                    <tr>
+                      <td colSpan="7" className="no-data">
+                        {loading ? 'Loading workstreams...' : 'No delivery tools found'}
+                      </td>
+                    </tr>
+                  ) : (
+                    workstreams.map((ws, index) => (
+                      <tr key={ws.deliveryToolName || index}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={selectedDeliveryTools.has(ws.deliveryToolName)}
+                            onChange={(e) => handleSelectDeliveryTool(ws.deliveryToolName, e.target.checked)}
+                          />
+                        </td>
+                        <td>
+                          {ws.deliveryToolName === 'Unassigned' ? (
+                            <span style={{ color: '#706e6b', fontStyle: 'italic' }}>
+                              {ws.deliveryToolName}
+                            </span>
+                          ) : (
+                            <span 
+                              className="delivery-tool-link" 
+                              onClick={() => handleDeliveryToolClick(ws.deliveryToolName)}
+                              style={{ color: '#0176d3', cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                              {ws.deliveryToolName || '--'}
+                            </span>
+                          )}
+                        </td>
+                        <td>{ws.projectObjectivesCount || 0}</td>
+                        <td>{ws.projectsCount || 0}</td>
+                        <td>{ws.workstreamCount || 0}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {loadingContributorCounts[ws.deliveryToolName] ? (
+                              <Loader className="spinning" size={14} style={{ display: 'inline-block' }} />
+                            ) : contributorProjectsCounts[ws.deliveryToolName] !== undefined ? (
+                              <>
+                                <span>{contributorProjectsCounts[ws.deliveryToolName]}</span>
+                                {contributorProjectsCounts[ws.deliveryToolName] > 0 && (
+                                  <button
+                                    onClick={() => handleDownloadContributorProjects(ws.deliveryToolName)}
+                                    disabled={downloadingContributorProjects[ws.deliveryToolName]}
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: downloadingContributorProjects[ws.deliveryToolName] ? '#706e6b' : '#0176d3',
+                                      cursor: downloadingContributorProjects[ws.deliveryToolName] ? 'not-allowed' : 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      padding: '2px 4px',
+                                      fontSize: '12px',
+                                      opacity: downloadingContributorProjects[ws.deliveryToolName] ? 0.6 : 1
+                                    }}
+                                    title={downloadingContributorProjects[ws.deliveryToolName] ? 'Downloading...' : 'Download Contributor Projects List'}
+                                  >
+                                    {downloadingContributorProjects[ws.deliveryToolName] ? (
+                                      <Loader className="spinning" size={14} />
+                                    ) : (
+                                      <Download size={14} />
+                                    )}
+                                  </button>
+                                )}
+                              </>
+                            ) : (
+                              <button
+                                onClick={() => fetchContributorProjectsCount(ws.deliveryToolName)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#0176d3',
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '4px 8px',
+                                  fontSize: '13px'
+                                }}
+                                title="Get Contributor Project Count"
+                              >
+                                <Search size={14} />
+                                Get Count
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => handleDownloadWorkstreams(ws.deliveryToolName)}
+                            disabled={downloadingContributorProjects[ws.deliveryToolName]}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: downloadingContributorProjects[ws.deliveryToolName] ? '#706e6b' : '#0176d3',
+                              cursor: downloadingContributorProjects[ws.deliveryToolName] ? 'not-allowed' : 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '4px 8px',
+                              fontSize: '13px',
+                              opacity: downloadingContributorProjects[ws.deliveryToolName] ? 0.6 : 1
+                            }}
+                            title={downloadingContributorProjects[ws.deliveryToolName] ? 'Downloading...' : 'Download Workstreams for this tool'}
+                          >
+                            {downloadingContributorProjects[ws.deliveryToolName] ? (
+                              <Loader className="spinning" size={14} />
+                            ) : (
+                              <>
+                                <Download size={14} />
+                                Download Workstreams
+                              </>
+                            )}
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Analytics Section - Below Summary Table */}
+          {showAnalytics && (
+            <div style={{
+              marginTop: '24px',
+              padding: '20px',
+              backgroundColor: '#fff',
+              borderRadius: '8px',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+                  <BarChart3 size={20} style={{ display: 'inline-block', marginRight: '8px', verticalAlign: 'middle' }} />
+                  Trend Analysis - Project Objectives by Delivery Tool
+                </h3>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <label style={{ fontSize: '14px' }}>Days:</label>
+                  <select
+                    value={analyticsDays}
+                    onChange={(e) => setAnalyticsDays(parseInt(e.target.value))}
+                    style={{
+                      padding: '6px 12px',
+                      border: '1px solid #ddd',
+                      borderRadius: '4px',
+                      fontSize: '14px'
+                    }}
+                  >
+                    <option value={7}>7 Days</option>
+                    <option value={14}>14 Days</option>
+                    <option value={30}>30 Days</option>
+                    <option value={60}>60 Days</option>
+                    <option value={90}>90 Days</option>
+                  </select>
+                  <button
+                    className="btn-secondary"
+                    onClick={fetchAnalytics}
+                    disabled={loadingAnalytics}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px' }}
+                  >
+                    <RefreshCw size={14} className={loadingAnalytics ? 'spinning' : ''} />
+                    Refresh
+                  </button>
+                </div>
+              </div>
+              
+              {loadingAnalytics ? (
+                <div className="loading-container" style={{ minHeight: 'calc(100vh - 200px)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                  <Loader className="spinning" size={24} style={{ color: '#08979C' }} />
+                  <p>Loading analytics...</p>
+                </div>
+              ) : Object.keys(analyticsData).length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
+                  <p>No analytics data available. Data will be collected as snapshots are created.</p>
+                </div>
+              ) : (
+                <div style={{ width: '100%', height: '400px' }}>
+                  <ResponsiveContainer>
+                    <AreaChart data={prepareChartData()} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                      <defs>
+                        {Object.keys(analyticsData).map((toolName, index) => {
+                          const colors = generateUniqueColors(Object.keys(analyticsData).length);
+                          const color = colors[index];
+                          const isSelected = selectedTools.has(toolName);
+                          return (
+                            <linearGradient key={toolName} id={`color${toolName}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor={color} stopOpacity={isSelected ? 0.8 : 0.2}/>
+                              <stop offset="95%" stopColor={color} stopOpacity={isSelected ? 0.1 : 0.05}/>
+                            </linearGradient>
+                          );
+                        })}
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        dataKey="date" 
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                        style={{ fontSize: '12px' }}
+                      />
+                      <YAxis style={{ fontSize: '12px' }} />
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px' }}
+                        labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          
+                          // Filter to show only selected tools
+                          const selectedPayload = payload.filter(item => selectedTools.has(item.dataKey));
+                          
+                          if (selectedPayload.length === 0) {
+                            return (
+                              <div style={{ padding: '8px', fontSize: '12px', color: '#666' }}>
+                                No selected tools
+                              </div>
+                            );
+                          }
+                          
+                          return (
+                            <div style={{ padding: '10px', backgroundColor: '#fff', border: '1px solid #ddd', borderRadius: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                              <p style={{ margin: '0 0 8px 0', fontWeight: 'bold', fontSize: '13px', color: '#333' }}>
+                                {label}
+                              </p>
+                              {selectedPayload.map((entry, index) => {
+                                const colors = generateUniqueColors(Object.keys(analyticsData).length);
+                                const toolIndex = Object.keys(analyticsData).indexOf(entry.dataKey);
+                                const color = colors[toolIndex];
+                                return (
+                                  <div key={index} style={{ 
+                                    display: 'flex', 
+                                    alignItems: 'center', 
+                                    gap: '8px',
+                                    marginBottom: '4px',
+                                    fontSize: '12px'
+                                  }}>
+                                    <span style={{
+                                      display: 'inline-block',
+                                      width: '12px',
+                                      height: '12px',
+                                      backgroundColor: color,
+                                      borderRadius: '2px'
+                                    }} />
+                                    <span style={{ color: '#666', minWidth: '150px' }}>{entry.dataKey}:</span>
+                                    <span style={{ fontWeight: '600', color: '#333' }}>{entry.value}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        }}
+                      />
+                      <Legend 
+                        wrapperStyle={{ paddingTop: '20px' }}
+                        content={({ payload }) => {
+                          if (!payload || payload.length === 0) return null;
+                          return (
+                            <div style={{ 
+                              display: 'flex', 
+                              flexWrap: 'wrap', 
+                              gap: '12px',
+                              padding: '10px',
+                              justifyContent: 'center',
+                              alignItems: 'center'
+                            }}>
+                              <div style={{ 
+                                display: 'flex', 
+                                gap: '8px', 
+                                alignItems: 'center',
+                                marginRight: '16px',
+                                padding: '4px 8px',
+                                border: '1px solid #e0e0e0',
+                                borderRadius: '4px',
+                                backgroundColor: '#f9f9f9'
+                              }}>
+                                <button
+                                  onClick={handleSelectAllTools}
+                                  style={{
+                                    padding: '4px 8px',
+                                    fontSize: '12px',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px',
+                                    background: '#fff',
+                                    cursor: 'pointer',
+                                    marginRight: '4px'
+                                  }}
+                                >
+                                  Select All
+                                </button>
+                                <button
+                                  onClick={handleDeselectAllTools}
+                                  style={{
+                                    padding: '4px 8px',
+                                    fontSize: '12px',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px',
+                                    background: '#fff',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Deselect All
+                                </button>
+                              </div>
+                              {Object.keys(analyticsData).map((toolName, index) => {
+                                const isSelected = selectedTools.has(toolName);
+                                const colors = generateUniqueColors(Object.keys(analyticsData).length);
+                                const color = colors[index];
+                                return (
+                                  <div
+                                    key={toolName}
+                                    onClick={() => handleToolToggle(toolName)}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                      cursor: 'pointer',
+                                      padding: '6px 10px',
+                                      borderRadius: '4px',
+                                      backgroundColor: isSelected ? '#f0f7ff' : '#f9f9f9',
+                                      border: `1px solid ${isSelected ? color : '#e0e0e0'}`,
+                                      opacity: isSelected ? 1 : 0.6,
+                                      transition: 'all 0.2s'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.backgroundColor = isSelected ? '#e0f0ff' : '#f0f0f0';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.backgroundColor = isSelected ? '#f0f7ff' : '#f9f9f9';
+                                    }}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleToolToggle(toolName)}
+                                      onClick={(e) => e.stopPropagation()}
+                                      style={{
+                                        cursor: 'pointer',
+                                        marginRight: '4px',
+                                        width: '16px',
+                                        height: '16px'
+                                      }}
+                                    />
+                                    <span
+                                      style={{
+                                        display: 'inline-block',
+                                        width: '14px',
+                                        height: '14px',
+                                        backgroundColor: color,
+                                        borderRadius: '2px',
+                                        marginRight: '4px',
+                                        flexShrink: 0
+                                      }}
+                                    />
+                                    <span style={{ fontSize: '13px', fontWeight: isSelected ? '500' : '400' }}>{toolName}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        }}
+                      />
+                      {Object.keys(analyticsData).map((toolName, index) => {
+                        const colors = generateUniqueColors(Object.keys(analyticsData).length);
+                        const color = colors[index];
+                        const isSelected = selectedTools.has(toolName);
+                        return (
+                          <Area
+                            key={toolName}
+                            type="monotone"
+                            dataKey={toolName}
+                            stroke={color}
+                            fill={`url(#color${toolName})`}
+                            strokeWidth={isSelected ? 2 : 1}
+                            strokeDasharray={isSelected ? '0' : '5 5'}
+                            opacity={isSelected ? 1 : 0.4}
+                            name={toolName}
+                          />
+                        );
+                      })}
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+          )}
+      </div>
+
+      {/* Project Objectives Modal */}
+        {showProjectObjectivesModal && (
+          <div className="modal-overlay" onClick={() => setShowProjectObjectivesModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header" style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => setProjectObjectivesModalCollapsed(!projectObjectivesModalCollapsed)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                  {projectObjectivesModalCollapsed ? (
+                    <ChevronDown size={16} style={{ flexShrink: 0 }} />
+                  ) : (
+                    <ChevronUp size={16} style={{ flexShrink: 0 }} />
+                  )}
+                  <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#16325c', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+                    {selectedDeliveryTool}
+                  </h2>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    className="btn-secondary"
+                    onClick={handleExportProjectObjectives}
+                    disabled={projectObjectives.length === 0}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '13px' }}
+                    title="Export to Excel"
+                  >
+                    <Download size={14} />
+                    Export
+                  </button>
+                  <button className="modal-close" onClick={() => setShowProjectObjectivesModal(false)}>
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              {!projectObjectivesModalCollapsed && (
+              <div className="modal-body">
+                {loadingProjectObjectives && projectObjectives.length === 0 ? (
+                  <div className="loading-container" style={{ minHeight: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <Loader className="spinner" size={24} style={{ color: '#08979C' }} />
+                    <p>Loading project objectives...</p>
+                  </div>
+                ) : (
+                  <div className="project-objectives-table-container" style={{ maxHeight: '60vh', overflowY: 'auto', overflowX: 'auto', width: '100%' }}>
+                    <table className="project-objectives-table">
+                      <thead>
+                        <tr>
+                          <th>Project Objective</th>
+                          <th>Project</th>
+                          <th>Associated WorkStream</th>
+                          <th>Delivery Tool Name</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {projectObjectives.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="no-data">
+                              No project objectives found for this delivery tool
+                            </td>
+                          </tr>
+                        ) : (
+                          <>
+                            {projectObjectives.map((po, index) => (
+                              <tr key={po.id || index}>
+                                <td>{po.name || '--'}</td>
+                                <td>{po.projectName || '--'}</td>
+                                <td>{po.workstreamName || '--'}</td>
+                                <td>{po.deliveryToolName || '--'}</td>
+                                <td>
+                                  <button
+                                    className="btn-link"
+                                    onClick={() => handleViewContributorProjects(po)}
+                                  >
+                                    <Eye size={14} />
+                                    View Contributor Projects
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                            {projectObjectivesHasMore && (
+                              <tr>
+                                <td colSpan="5" style={{ textAlign: 'center', padding: '16px' }}>
+                                  {loadingMoreProjectObjectives ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                                      <Loader className="spinning" size={16} />
+                                      <span>Loading more...</span>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      className="btn-secondary"
+                                      onClick={loadMoreProjectObjectives}
+                                      style={{ padding: '8px 16px' }}
+                                    >
+                                      Load More ({projectObjectivesTotal - projectObjectives.length} remaining)
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </>
+                        )}
+                      </tbody>
+                    </table>
+                    {/* Infinite scroll trigger */}
+                    {projectObjectivesHasMore && !loadingMoreProjectObjectives && (
+                      <div
+                        ref={infiniteScrollRef}
+                        style={{ height: '20px', width: '100%' }}
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+              )}
+              <div className="modal-footer">
+                <button className="btn-secondary" onClick={() => setShowProjectObjectivesModal(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Contributor Projects Modal */}
+        {showContributorProjectsModal && selectedProjectObjective && (
+          <div className="modal-overlay" onClick={() => setShowContributorProjectsModal(false)}>
+            <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header" style={{ padding: '12px 16px', cursor: 'pointer' }} onClick={() => setContributorProjectsModalCollapsed(!contributorProjectsModalCollapsed)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
+                  {contributorProjectsModalCollapsed ? (
+                    <ChevronDown size={16} style={{ flexShrink: 0 }} />
+                  ) : (
+                    <ChevronUp size={16} style={{ flexShrink: 0 }} />
+                  )}
+                  <h2 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: '#16325c', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>
+                    {selectedProjectObjective.name}
+                  </h2>
+                </div>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+                  <button
+                    className="btn-secondary"
+                    onClick={handleExportContributorProjects}
+                    disabled={contributorProjects.length === 0}
+                    style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', fontSize: '13px' }}
+                    title="Export to Excel"
+                  >
+                    <Download size={14} />
+                    Export
+                  </button>
+                  <button className="modal-close" onClick={() => setShowContributorProjectsModal(false)}>
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+              {!contributorProjectsModalCollapsed && (
+              <div className="modal-body">
+                {loadingContributorProjects ? (
+                  <div className="loading-container" style={{ minHeight: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                    <Loader className="spinner" size={24} style={{ color: '#08979C' }} />
+                    <p>Loading contributor projects...</p>
+                  </div>
+                ) : (
+                  <div className="project-objectives-table-container contributor-projects-table" style={{ overflowX: 'visible', width: '100%', maxWidth: '100%' }}>
+                    <table className="project-objectives-table contributor-projects-table" style={{ width: '100%', tableLayout: 'fixed' }}>
+                      <thead>
+                        <tr>
+                          <th>Contributor Project Name</th>
+                          <th>Project</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contributorProjects.length === 0 ? (
+                          <tr>
+                            <td colSpan="3" className="no-data">
+                              No contributor projects found for this project objective
+                            </td>
+                          </tr>
+                        ) : (
+                          contributorProjects.map((cp, index) => (
+                            <tr key={cp.id || index}>
+                              <td>{cp.name || '--'}</td>
+                              <td>{cp.projectName || '--'}</td>
+                              <td>{cp.status || '--'}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                    {contributorProjectsHasMore && (
+                      <div style={{ textAlign: 'center', padding: '16px', borderTop: '1px solid #e2e8f0' }}>
+                        <button
+                          onClick={handleLoadMoreContributorProjects}
+                          disabled={loadingMoreContributorProjects}
+                          style={{
+                            padding: '10px 20px',
+                            backgroundColor: loadingMoreContributorProjects ? '#cbd5e1' : '#08979C',
+                            color: '#ffffff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: loadingMoreContributorProjects ? 'not-allowed' : 'pointer',
+                            fontSize: '14px',
+                            fontWeight: '500',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '8px'
+                          }}
+                        >
+                          {loadingMoreContributorProjects ? (
+                            <>
+                              <Loader className="spinner" size={16} />
+                              Loading...
+                            </>
+                          ) : (
+                            'Show More'
+                          )}
+                        </button>
+                        <div style={{ marginTop: '8px', fontSize: '12px', color: '#64748b' }}>
+                          Showing {contributorProjects.length} entries. Click to load more.
+                        </div>
+                      </div>
+                    )}
+                    {contributorProjects.length > 0 && (
+                      <div style={{ marginTop: '12px', fontSize: '13px', color: '#706e6b' }}>
+                        Total: {contributorProjects.length} contributor project{contributorProjects.length !== 1 ? 's' : ''}
+                        {!contributorProjectsHasMore && contributorProjects.length >= 1000 && ' (all entries loaded)'}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              )}
+              <div className="modal-footer">
+                <button className="btn-secondary" onClick={() => setShowContributorProjectsModal(false)}>
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+    </>
+  );
+
+  if (hideHeader) {
+    return <div className="workstream-reporting-content-wrapper">{content}</div>;
+  }
+
+  return (
+    <div className="dashboard-layout">
+      <Sidebar isOpen={sidebarOpen} toggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
+      <div className="workstream-reporting" style={{ marginLeft: `${sidebarWidth}px`, width: `calc(100% - ${sidebarWidth}px)`, transition: 'margin-left 0.2s ease, width 0.2s ease', minHeight: '100vh' }}>
+        <div className="workstream-reporting-container">
+          <div className="workstream-reporting-header">
+            <div className="header-content">
+              <div className="header-left">
+                <button
+                  className="header-menu-toggle"
+                  onClick={() => setSidebarOpen(!sidebarOpen)}
+                >
+                  <Menu size={20} />
+                </button>
+                <div>
+                  <h1 className="page-title">
+                    WorkStream Reporting
+                  </h1>
+                  <p className="page-subtitle">
+                    View workstream summary and associated project objectives
+                  </p>
+                </div>
+              </div>
+              <div className="header-right">
+                <GPCFilterToggle />
+              </div>
+              <div className="header-user-profile">
+                <UserProfileDropdown />
+              </div>
+            </div>
+          </div>
+          {content}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default WorkStreamReporting;
+

@@ -1,0 +1,587 @@
+.client-tool-account {
+  min-height: 100vh;
+  background: var(--bg-primary);
+  transition: margin-left var(--transition-base);
+  width: 100%;
+  color: #002329;
+  font-family: Poppins;
+  font-size: 14px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.client-tool-account-container {
+  width: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  color: #002329;
+  font-family: Poppins;
+  font-size: 14px;
+}
+
+.client-tool-account-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 4px 16px;
+  margin: 0;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: none;
+}
+
+.client-tool-account .header-content {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+}
+
+.client-tool-account .header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.client-tool-account .header-menu-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: #002329;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  flex-shrink: 0;
+}
+
+.client-tool-account .header-menu-toggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.client-tool-account .page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.client-tool-account .page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 2px 0 0 0;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.client-tool-account .header-user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.client-tool-account .user-profile {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* Clickable field styles */
+.clickable-field {
+  transition: opacity 0.2s;
+}
+
+.clickable-field:hover {
+  opacity: 0.8;
+}
+
+.client-tool-account .user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  background: #08979C;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.client-tool-account .user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.client-tool-account .user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: Poppins;
+}
+
+.client-tool-account .user-role {
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-transform: capitalize;
+}
+
+.client-tool-account-actions {
+  margin-bottom: 24px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.client-tool-account .create-form-card {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  z-index: 100;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  max-width: 100%;
+}
+
+/* Scoped form styles - only apply within client-tool-account container */
+.client-tool-account .form-group {
+  margin-bottom: 10px;
+}
+
+.client-tool-account .form-group label {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.client-tool-account .form-group input[type="text"],
+.client-tool-account .form-group input[type="email"],
+.client-tool-account .form-group input[type="date"],
+.client-tool-account .form-group input[type="time"],
+.client-tool-account .form-group select,
+.client-tool-account .form-group textarea {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 12px;
+  font-family: Poppins;
+  background: var(--surface);
+  color: var(--text-primary);
+  transition: all var(--transition-base);
+  box-sizing: border-box;
+}
+
+.client-tool-account .form-group input:focus,
+.client-tool-account .form-group select:focus,
+.client-tool-account .form-group textarea:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(8, 151, 156, 0.1);
+}
+
+.client-tool-account .form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.client-tool-account .form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+/* Scoped button styles - only apply within client-tool-account container */
+/* Match the global btn-primary style from ProjectSetup.css */
+.client-tool-account .btn-primary {
+  padding: 8px 16px;
+  background: #08979C;
+  color: #FFF;
+  border: none;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  font-family: Poppins;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
+.client-tool-account .btn-primary:hover:not(:disabled) {
+  background: #08979C;
+  opacity: 0.9;
+  color: #FFF;
+  transform: none;
+  box-shadow: none;
+}
+
+.client-tool-account .btn-primary:active:not(:disabled) {
+  background: #08979C;
+  opacity: 0.8;
+  color: #FFF;
+  transform: none;
+  box-shadow: none;
+}
+
+.client-tool-account .btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Specific styles for Create Client Tool Account button - scoped to client-tool-account */
+/* Ensure text and all child elements stay white on hover */
+.client-tool-account .create-client-tool-account-btn,
+.client-tool-account .create-client-tool-account-btn:hover,
+.client-tool-account .create-client-tool-account-btn:active,
+.client-tool-account .create-client-tool-account-btn:focus {
+  background: #08979C !important;
+  color: #FFF !important;
+}
+
+.client-tool-account .create-client-tool-account-btn:hover:not(:disabled) {
+  background: #08979C !important;
+  opacity: 0.9 !important;
+  color: #FFF !important;
+}
+
+.client-tool-account .create-client-tool-account-btn *,
+.client-tool-account .create-client-tool-account-btn:hover *,
+.client-tool-account .create-client-tool-account-btn:active *,
+.client-tool-account .create-client-tool-account-btn:focus * {
+  color: #FFF !important;
+}
+
+.client-tool-account .create-client-tool-account-btn span,
+.client-tool-account .create-client-tool-account-btn:hover span,
+.client-tool-account .create-client-tool-account-btn:active span,
+.client-tool-account .create-client-tool-account-btn:focus span {
+  color: #FFF !important;
+  font-weight: 500;
+}
+
+/* Scoped button styles - only apply within client-tool-account container */
+.client-tool-account .btn-secondary {
+  padding: 8px 16px;
+  background: var(--surface);
+  color: #08979C;
+  border: 1px solid #08979C;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: Poppins;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  box-sizing: border-box;
+}
+
+.client-tool-account .btn-secondary:hover:not(:disabled) {
+  border-color: #08979C;
+  color: #FFF;
+  transform: none;
+  box-shadow: none;
+  background: #08979C;
+}
+
+.client-tool-account .btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.client-tool-account .btn-icon {
+  padding: 8px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-base);
+  color: var(--text-secondary);
+}
+
+.client-tool-account .btn-icon:hover:not(:disabled) {
+  background: var(--bg-secondary);
+  color: var(--primary-color);
+}
+
+.client-tool-account .btn-icon:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.client-tool-account .btn-success {
+  color: var(--success);
+}
+
+.client-tool-account .btn-success:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+/* Scoped search box - only apply within client-tool-account container */
+.client-tool-account .search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.client-tool-account .search-box input {
+  width: 100%;
+  padding: 10px 16px 10px 40px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  font-family: Poppins;
+  background: var(--surface);
+  color: var(--text-primary);
+  transition: all var(--transition-base);
+  position: relative;
+}
+
+.client-tool-account .search-box input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 3px rgba(8, 151, 156, 0.1);
+}
+
+.client-tool-account .search-results {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.client-tool-account .search-result-item {
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.client-tool-account .search-result-item:last-child {
+  border-bottom: none;
+}
+
+.client-tool-account .search-result-item:hover {
+  background: var(--bg-secondary);
+}
+
+.client-tool-account .search-results-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  max-height: 250px;
+  overflow-y: auto;
+  z-index: 1000;
+  margin-top: 4px;
+}
+
+.client-tool-account .contributor-projects-list {
+  margin-top: 24px;
+}
+
+.client-tool-account .projects-table {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  max-height: 70vh;
+  overflow-y: auto;
+  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Scrollbar styling for table container */
+.client-tool-account .projects-table::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.client-tool-account .projects-table::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.client-tool-account .projects-table::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.client-tool-account .projects-table::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.client-tool-account .projects-table table {
+  width: 100%;
+  border-collapse: collapse;
+  flex-shrink: 0;
+}
+
+.client-tool-account .projects-table thead {
+  background: #f3f2f2;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.client-tool-account .projects-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: #706e6b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #d8dde6;
+  background: #f3f2f2;
+}
+
+.client-tool-account .projects-table td {
+  padding: 16px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.client-tool-account .projects-table tbody tr:hover {
+  background: var(--bg-secondary);
+}
+
+.client-tool-account .projects-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.client-tool-account .no-projects {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-secondary);
+}
+
+.client-tool-account .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--border-color);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+}
+
+@keyframes spin {
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+.client-tool-account .spinning {
+  animation: spin 1s linear infinite;
+}
+
+/* Loading container - match Project Performance Dashboard style */
+.client-tool-account .loading-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-height: calc(100vh - 200px) !important;
+  padding: 60px 20px !important;
+  color: #666 !important;
+  width: 100% !important;
+  text-align: center !important;
+  gap: 16px !important;
+}
+
+.client-tool-account .loading-container .spinner,
+.client-tool-account .loading-container .spinning {
+  animation: spin 1s linear infinite !important;
+  color: #08979C !important;
+}
+
+.client-tool-account .loading-container p {
+  color: #666 !important;
+  font-size: 14px !important;
+  margin: 0 !important;
+}
+
+.client-tool-account .neumorphic {
+  background: var(--surface);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+}
+
+.client-tool-account .fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .client-tool-account {
+    margin-left: 80px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .client-tool-account .projects-table {
+    overflow-x: auto;
+  }
+  
+  .client-tool-account .projects-table table {
+    min-width: 800px;
+  }
+  
+  .client-tool-account .bulk-update-controls {
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+}
+

@@ -1,0 +1,89 @@
+/* Global Table Header Styles - Standardized across all pages */
+/* This ensures consistent table header styling, color, format, and alignment */
+
+/* Standard table header styling - applies to all tables */
+table thead {
+  background: #f3f2f2;
+}
+
+table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #706e6b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #d8dde6;
+  background: #f3f2f2;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+/* Specific table classes should inherit from global styles */
+.case-table thead,
+.summary-table thead,
+.project-objectives-table thead,
+.contributors-table thead,
+.po-pay-rates-table thead,
+.po-productivity-targets-table thead,
+.mfa-log-table thead,
+.onboarding-contributors-table thead,
+.contributor-match-matrix-table thead,
+.active-contributors-table thead,
+.project-roster-funnel-table thead,
+.client-tool-account-table thead,
+.queue-status-table thead,
+.user-management-table thead,
+.audit-logs-table thead,
+.history-table thead,
+.preview-table thead,
+.report-table thead,
+.advanced-report-table thead {
+  background: #f3f2f2;
+}
+
+.case-table th,
+.summary-table th,
+.project-objectives-table th,
+.contributors-table th,
+.po-pay-rates-table th,
+.po-productivity-targets-table th,
+.mfa-log-table th,
+.onboarding-contributors-table th,
+.contributor-match-matrix-table th,
+.active-contributors-table th,
+.project-roster-funnel-table th,
+.client-tool-account-table th,
+.queue-status-table th,
+.user-management-table th,
+.audit-logs-table th,
+.history-table th,
+.preview-table th,
+.report-table th,
+.advanced-report-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: #706e6b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-bottom: 2px solid #d8dde6;
+  background: #f3f2f2;
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+/* Override any conflicting styles to ensure consistency */
+table th[style*="font-size"],
+table th[style*="color"],
+table th[style*="text-transform"],
+table th[style*="font-weight"] {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  color: #706e6b !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+}
+

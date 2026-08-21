@@ -1,0 +1,19 @@
+[
+  {
+    "id": "QSTEP-1762529915037",
+    "projectQualificationStepStatus": "Draft",
+    "numberOfAttempts": "1",
+    "funnel": "",
+    "projectQualificationStepName": "QualStep",
+    "project": "MahiTest",
+    "projectObjective": "",
+    "qualificationStep": "",
+    "stepNumber": "",
+    "createdBy": "admin@example.com",
+    "lastModifiedBy": "",
+    "createdAt": "2025-11-07T15:38:35.037Z",
+    "status": "draft",
+    "salesforceId": null,
+    "salesforceSyncStatus": "pending"
+  }
+]

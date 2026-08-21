@@ -1,0 +1,40 @@
+/* Scoped styles for AddContributorReview page */
+
+/* Override global padding for contributor search input */
+.add-contributor-review-page .contributor-search-input {
+  padding-left: 48px !important;
+  padding-right: 12px !important;
+  padding-top: 10px !important;
+  padding-bottom: 10px !important;
+  font-size: 14px !important;
+  height: auto !important;
+  min-height: auto !important;
+}
+
+.add-contributor-review-page .contributor-search-input.loading {
+  padding-right: 48px !important;
+}
+
+/* Ensure search icon doesn't overlap */
+.add-contributor-review-page .contributor-search-wrapper {
+  position: relative;
+}
+
+.add-contributor-review-page .contributor-search-wrapper .search-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1;
+  pointer-events: none;
+  color: #666;
+}
+
+/* Contributor Review Number input */
+.add-contributor-review-page .contributor-review-number-input {
+  padding: 10px 12px !important;
+  font-size: 14px !important;
+  height: auto !important;
+  min-height: auto !important;
+}
+

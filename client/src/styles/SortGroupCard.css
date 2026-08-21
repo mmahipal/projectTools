@@ -1,0 +1,43 @@
+/* Sort Group Card - Scoped Styles */
+
+.sort-group-card {
+  border-left: 4px solid #10b981;
+}
+
+.sort-group-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.control-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #002329;
+  font-family: 'Poppins', sans-serif;
+}
+
+.control-select {
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  font-size: 13px;
+  font-family: 'Poppins', sans-serif;
+  background: #fff;
+  cursor: pointer;
+}
+
+.control-select:focus {
+  outline: none;
+  border-color: #08979C;
+  box-shadow: 0 0 0 2px rgba(8, 151, 156, 0.1);
+}
+
+
+
