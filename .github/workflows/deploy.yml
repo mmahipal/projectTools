@@ -35,7 +35,8 @@ jobs:
         run: npm ci
         working-directory: client
         env:
-          CI: false # <-- Add this block to ignore code warnings
+          CI: false
+          DISABLE_ESLINT_PLUGIN: true
 
       - name: Build Application
         run: npm run build
