@@ -308,6 +308,7 @@ const ProjectSetup = () => {
     // Saving project data
       isEdit: !!existingId,
       projectId: existingId,
+      console.log('[ProjectSetup] Publishing project to Salesforce:', {
       totalFields: Object.keys(cleanedData).length,
       fields: Object.keys(cleanedData),
       projectManager: cleanedData.projectManager,
