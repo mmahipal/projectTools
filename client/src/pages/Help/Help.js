@@ -12,6 +12,7 @@ const Help = () => {
   // Debug: Log documentation content on mount
   useEffect(() => {
     if (process.env.NODE_ENV === 'development') {
+      console.log('Documentation content loaded:', {
         totalTopics: Object.keys(documentationContent).length,
         topics: Object.keys(documentationContent),
         selectedTopic,
